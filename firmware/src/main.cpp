@@ -1,19 +1,12 @@
 #include <Arduino.h>
-#include "./ArduinoRadio.h"
-// put function declarations here:
-int myFunction(int, int);
+#include "ArduinoRadio.h"
+
+static ArduinoRadio radio;
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
-  ArduinoRadio testowe;
+    radio.begin();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+    radio.update();
 }
