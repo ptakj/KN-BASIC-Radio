@@ -92,7 +92,7 @@ void ArduinoRadio::savePreset() {
     int addr = currentPreset * 4;
 
     for (int i = 0; i < 4; i++) {
-        EEPROM.write(addr + i, b[i]);
+       
     }
 }
 
@@ -101,7 +101,7 @@ void ArduinoRadio::loadPresets() {
         byte b[4];
 
         for (int i = 0; i < 4; i++) {
-            b[i] = EEPROM.read(p * 4 + i);
+           
         }
 
         memcpy(&presets[p], b, 4);

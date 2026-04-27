@@ -1,11 +1,11 @@
 
 #pragma once
-#include <radio.h>
-#include <RDA5807M.h>
+
+#include <RDA5807.h>
 
 class FMRadio {
 private:
-    RDA5807M radio;
+    RDA5807 radio;
     float frequency;
 
 public:

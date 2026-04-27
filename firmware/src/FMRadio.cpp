@@ -1,10 +1,9 @@
 #include "FMRadio.h"
 
 void FMRadio::begin(float startFreq) {
-    radio.init();
-    radio.setBand(RADIO_BAND_FM);
+    radio.setup();
 
-    frequency = startFreq;
+    frequency = startFreq;  
     setFrequency(frequency);
 
     radio.setVolume(8);
@@ -22,7 +21,6 @@ float FMRadio::getFrequency() {
 }
 
 int FMRadio::getRSSI() {
-    RADIO_INFO info;
-    radio.getRadioInfo(&info);
-    return info.rssi;
+
+    return radio.getRssi();
 }

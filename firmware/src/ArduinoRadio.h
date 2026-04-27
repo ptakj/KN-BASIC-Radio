@@ -3,7 +3,7 @@
 #include "FMRadio.h"
 #include "LCDDisplay.h"
 #include "EncoderInput.h"
-#include <EEPROM.h>
+
 
 #define NUM_PRESETS 5
 
