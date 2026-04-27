@@ -1,10 +1,15 @@
 #include "LCDDisplay.h"
-
+#include <wiring.c>
 LCDDisplay::LCDDisplay() : _lcd(0x27, 16, 2) {}
 
 void LCDDisplay::begin() {
+    delay(100);
+
     _lcd.init();
     _lcd.backlight();
+
+    _lcd.clear();
+    _lcd.home();
 }
 
 void LCDDisplay::setLine(uint8_t row, const char* text) {
