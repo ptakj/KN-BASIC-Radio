@@ -206,3 +206,20 @@ void ArduinoRadio::formatFreq(uint16_t freq, char* buf, uint8_t bufSize) {
     buf[i++] = 'z';
     buf[i]   = '\0';
 }
+
+void ArduinoRadio::selectNextStation(int8_t direction) {
+
+    uint8_t total = _radio.getTotalFound();
+    if (total == 0) return;
+
+    if (direction > 0) {
+        _stationIndex = (_stationIndex + 1) % total;
+    } else {
+        _stationIndex = (_stationIndex == 0) ? (total - 1) : (_stationIndex - 1);
+    }
+    uint16_t freq = _radio.getStoredStation(_stationIndex);
+    _radio.setFrequency(freq);
+    _stateTimer = millis();
+    
+    _rdsText[0] = '\0';
+}

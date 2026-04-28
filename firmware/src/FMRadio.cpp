@@ -1,6 +1,41 @@
 #include "FMRadio.h"
 #include <string.h>
 
+
+void FMRadio::seek(bool up) {
+    uint8_t direction = up ? 1 : 0;
+    
+    _radio.seek(1, direction); 
+
+    delay(500); 
+    _frequency = _radio.getRealFrequency(); 
+}
+
+void FMRadio::autoScan() {
+    _totalFound = 0;
+    setFrequency(FREQ_MIN);
+    delay(200);
+
+    while (_totalFound < 20) {
+        _radio.seek(1, 1); 
+        
+        delay(600); 
+        
+        uint16_t foundFreq = _radio.getRealFrequency();
+
+        if (foundFreq <= FREQ_MIN || (_totalFound > 0 && foundFreq <= _foundStations[_totalFound - 1])) {
+            break;
+        }
+
+        if (_radio.getRssi() > 22) {
+            _foundStations[_totalFound] = foundFreq;
+            _totalFound++;
+        }
+    }
+}
+
+
+
 void FMRadio::begin(uint16_t startFreq, uint8_t startVolume) {
     _radio.setup();
     _radio.setRDS(true);

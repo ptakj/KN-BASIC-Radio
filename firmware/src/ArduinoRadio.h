@@ -42,7 +42,7 @@ private:
     uint8_t  _rdsScrollPos       = 0;
     uint32_t _rdsScrollTimer     = 0;
 
-    static constexpr uint32_t TUNING_TIMEOUT_MS      = 1000;
+    static constexpr uint32_t TUNING_TIMEOUT_MS      = 3000;
     static constexpr uint32_t VOLUME_TIMEOUT_MS      = 3000;
     static constexpr uint32_t RDS_SCROLL_INTERVAL_MS =  400;
 
@@ -58,6 +58,7 @@ private:
 
     void refreshRDS();
 
+    void selectNextStation(int8_t direction);
     /// Format a frequency (MHz × 100) as "NNN.N MHz" into buf (needs ≥ 10 bytes).
     static void formatFreq(uint16_t freq, char* buf, uint8_t bufSize);
 };

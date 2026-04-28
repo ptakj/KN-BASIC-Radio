@@ -8,7 +8,8 @@ class FMRadio {
 public:
     static constexpr uint8_t  VOLUME_MIN = 0;
     static constexpr uint8_t  VOLUME_MAX = 15;
-
+    uint16_t _foundStations[20]; 
+    uint8_t _totalFound;
     /// Initialise the chip and tune to startFreq with given volume.
     void     begin(uint16_t startFreq, uint8_t startVolume = 8);
 
@@ -31,6 +32,14 @@ public:
     /// Copy the RDS Radio Text (up to 64 chars) into buffer.
     /// Returns true when valid data was available.
     bool getRDSProgramInfo(char* buffer, uint8_t bufSize);
+
+    //Scan + seek
+    void seek(bool up);
+    void autoScan();
+    uint8_t getTotalFound() const { return _totalFound; }
+    uint16_t getStoredStation(uint8_t index) const { 
+        return (index < _totalFound) ? _foundStations[index] : FREQ_MIN; 
+    }
 
 private:
     RDA5807  _radio;
