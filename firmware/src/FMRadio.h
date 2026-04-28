@@ -6,6 +6,8 @@
 /// Manages frequency, volume, and RDS data retrieval.
 class FMRadio {
 public:
+    enum ScanState { IDLE, START_SCAN, SEEKING, EVALUATING };
+
     static constexpr uint8_t  VOLUME_MIN = 0;
     static constexpr uint8_t  VOLUME_MAX = 15;
     uint16_t _foundStations[20]; 
@@ -25,6 +27,8 @@ public:
 
     int8_t getRSSI();
 
+    
+
     /// Copy the RDS Program Service name (8 chars) into buffer.
     /// Returns true when valid data was available.
     bool getRDSStationName(char* buffer, uint8_t bufSize);
@@ -36,11 +40,12 @@ public:
     //Scan + seek
     void seek(bool up);
     void autoScan();
+    void update();
     uint8_t getTotalFound() const { return _totalFound; }
     uint16_t getStoredStation(uint8_t index) const { 
         return (index < _totalFound) ? _foundStations[index] : FREQ_MIN; 
     }
-
+    void startScan();
 private:
     RDA5807  _radio;
     uint16_t _frequency = 0;
@@ -48,4 +53,7 @@ private:
 
     static constexpr uint16_t FREQ_MIN = 8700;   // 87.0 MHz
     static constexpr uint16_t FREQ_MAX = 10800;  // 108.0 MHz
+
+    ScanState _scanState = IDLE; 
+    uint32_t _lastScanAction = 0; 
 };

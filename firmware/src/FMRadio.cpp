@@ -7,33 +7,64 @@ void FMRadio::seek(bool up) {
     
     _radio.seek(1, direction); 
 
-    delay(500); 
+    delay(100); 
     _frequency = _radio.getRealFrequency(); 
 }
+
 
 void FMRadio::autoScan() {
     _totalFound = 0;
     setFrequency(FREQ_MIN);
-    delay(200);
-
-    while (_totalFound < 20) {
-        _radio.seek(1, 1); 
-        
-        delay(600); 
-        
-        uint16_t foundFreq = _radio.getRealFrequency();
-
-        if (foundFreq <= FREQ_MIN || (_totalFound > 0 && foundFreq <= _foundStations[_totalFound - 1])) {
-            break;
-        }
-
-        if (_radio.getRssi() > 22) {
-            _foundStations[_totalFound] = foundFreq;
-            _totalFound++;
-        }
-    }
+    _lastScanAction = millis(); 
+    _scanState = START_SCAN;    
 }
 
+void FMRadio::update() {
+    if (_scanState == IDLE) return; 
+
+    uint32_t now = millis();
+
+    switch (_scanState) {
+        case START_SCAN:
+            if (now - _lastScanAction >= 100) {
+                _radio.seek(1, 1);
+                _lastScanAction = now;
+                _scanState = EVALUATING;
+            }
+            break;
+
+        case SEEKING:
+            _radio.seek(1, 1);
+            _lastScanAction = now;
+            _scanState = EVALUATING;
+            break;
+
+        case EVALUATING:
+            if (now - _lastScanAction >= 600) {
+                uint16_t foundFreq = _radio.getRealFrequency();
+
+                if (foundFreq <= FREQ_MIN || (_totalFound > 0 && foundFreq <= _foundStations[_totalFound - 1])) {
+                    _scanState = IDLE; 
+                    break;
+                }
+
+                if (_radio.getRssi() > 22) {
+                    if (_totalFound < 20) {
+                        _foundStations[_totalFound] = foundFreq;
+                        _totalFound++;
+                    } else {
+                        _scanState = IDLE;
+                        break;
+                    }
+                }
+
+                _lastScanAction = now;
+                _scanState = SEEKING; 
+            }
+            default:
+            break;
+    }
+}
 
 
 void FMRadio::begin(uint16_t startFreq, uint8_t startVolume) {
