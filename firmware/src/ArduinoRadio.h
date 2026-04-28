@@ -27,7 +27,8 @@ public:
     void update();
 
 private:
-    enum class State : uint8_t { IDLE, TUNING, VOLUME };
+    enum class State : uint8_t { IDLE, TUNING, VOLUME, SCANNING };
+    FMRadio::ScanState RadioScanState() { return _radio.getScanState(); }
 
     FMRadio      _radio;
     LCDDisplay   _display;
@@ -51,7 +52,7 @@ private:
     void updateIdle(uint32_t now);
     void updateTuning(uint32_t now);
     void updateVolume(uint32_t now);
-
+    void updateScanning(uint32_t now);
     void drawIdle();
     void drawTuning();
     void drawVolume();

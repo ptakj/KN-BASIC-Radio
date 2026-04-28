@@ -7,7 +7,7 @@
 class FMRadio {
 public:
     enum ScanState { IDLE, START_SCAN, SEEKING, EVALUATING };
-
+    ScanState getScanState() const { return _scanState; }
     static constexpr uint8_t  VOLUME_MIN = 0;
     static constexpr uint8_t  VOLUME_MAX = 15;
     uint16_t _foundStations[20]; 

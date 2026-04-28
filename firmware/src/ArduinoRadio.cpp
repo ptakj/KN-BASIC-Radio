@@ -17,6 +17,7 @@ void ArduinoRadio::begin() {
 }
 
 void ArduinoRadio::update() {
+    _radio.update();
     uint32_t now = millis();
     _encoder.update();
 
@@ -24,6 +25,7 @@ void ArduinoRadio::update() {
         case State::IDLE:   updateIdle(now);   break;
         case State::TUNING: updateTuning(now); break;
         case State::VOLUME: updateVolume(now); break;
+        case State::SCANNING: updateScanning(now); break;
     }
 }
 
@@ -46,6 +48,8 @@ void ArduinoRadio::enterState(State newState) {
             break;
         case State::VOLUME:
             drawVolume();
+            break;
+        default:
             break;
     }
 }
@@ -70,6 +74,26 @@ void ArduinoRadio::updateIdle(uint32_t now) {
         drawIdle();
     }
 }
+
+
+void ArduinoRadio::updateScanning(uint32_t now) {
+    if (_radio.getScanState() == FMRadio::IDLE) {
+        if (_radio.getTotalFound() > 0) {
+            _stationIndex = 0;
+            _radio.setFrequency(_radio.getStoredStation(0));
+        }
+        enterState(State::TUNING); 
+    }
+
+    if (now - _stateTimer >= 200) {
+        _display.setLine(0, "Skanowanie...");
+        char buf[17];
+        sprintf(buf, "Znaleziono: %d", _radio.getTotalFound());
+        _display.setLine(1, buf);
+        _stateTimer = now;
+    }
+}
+
 
 void ArduinoRadio::updateTuning(uint32_t now) {
     if (_encoder.wasButtonPressed()) {
@@ -115,6 +139,7 @@ void ArduinoRadio::updateVolume(uint32_t now) {
         enterState(State::IDLE);
     }
 }
+
 
 // ---------------------------------------------------------------------------
 // Private – display helpers
