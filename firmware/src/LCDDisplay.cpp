@@ -1,5 +1,6 @@
 #include "LCDDisplay.h"
-#include <wiring.c>
+#include <Arduino.h>
+
 LCDDisplay::LCDDisplay() : _lcd(0x27, 16, 2) {}
 
 void LCDDisplay::begin() {
