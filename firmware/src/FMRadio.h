@@ -3,17 +3,22 @@
 #include <stdint.h>
 
 /// Wrapper around the RDA5807 FM tuner chip.
-/// Manages frequency, volume, and RDS data retrieval.
+/// Manages frequency, volume, RDS data retrieval, seek and auto-scan.
 class FMRadio {
 public:
     enum ScanState { IDLE, START_SCAN, SEEKING, EVALUATING };
+
+    static constexpr uint8_t  VOLUME_MIN   = 0;
+    static constexpr uint8_t  VOLUME_MAX   = 15;
+    static constexpr uint8_t  MAX_STORED   = 20;  ///< Max stations kept in RAM/EEPROM
+
     ScanState getScanState() const { return _scanState; }
-    static constexpr uint8_t  VOLUME_MIN = 0;
-    static constexpr uint8_t  VOLUME_MAX = 15;
-    uint16_t _foundStations[20]; 
-    uint8_t _totalFound;
+
     /// Initialise the chip and tune to startFreq with given volume.
     void     begin(uint16_t startFreq, uint8_t startVolume = 8);
+
+    /// Non-blocking scan state machine driver – call every loop().
+    void     update();
 
     /// Tune to a frequency (MHz × 100, clamped to valid FM band).
     void     setFrequency(uint16_t freq);
@@ -27,25 +32,23 @@ public:
 
     int8_t getRSSI();
 
-    
-
     /// Copy the RDS Program Service name (8 chars) into buffer.
-    /// Returns true when valid data was available.
     bool getRDSStationName(char* buffer, uint8_t bufSize);
 
     /// Copy the RDS Radio Text (up to 64 chars) into buffer.
-    /// Returns true when valid data was available.
     bool getRDSProgramInfo(char* buffer, uint8_t bufSize);
 
-    //Scan + seek
+    /// Single seek step (up = true / down = false).  Blocking ~100 ms.
     void seek(bool up);
+
+    /// Start a non-blocking full-band auto-scan (driven by update()).
     void autoScan();
-    void update();
-    uint8_t getTotalFound() const { return _totalFound; }
-    uint16_t getStoredStation(uint8_t index) const { 
-        return (index < _totalFound) ? _foundStations[index] : FREQ_MIN; 
+
+    uint8_t  getTotalFound()                    const { return _totalFound; }
+    uint16_t getStoredStation(uint8_t index)    const {
+        return (index < _totalFound) ? _foundStations[index] : FREQ_MIN;
     }
-    void startScan();
+
 private:
     RDA5807  _radio;
     uint16_t _frequency = 0;
@@ -54,6 +57,8 @@ private:
     static constexpr uint16_t FREQ_MIN = 8700;   // 87.0 MHz
     static constexpr uint16_t FREQ_MAX = 10800;  // 108.0 MHz
 
-    ScanState _scanState = IDLE; 
-    uint32_t _lastScanAction = 0; 
+    uint16_t  _foundStations[MAX_STORED] = {};
+    uint8_t   _totalFound   = 0;
+    ScanState _scanState    = IDLE;
+    uint32_t  _lastScanAction = 0;
 };

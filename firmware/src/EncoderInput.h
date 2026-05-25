@@ -4,7 +4,7 @@
 
 /// Rotary encoder with a push-button.
 /// Call update() on every loop iteration, then consume events via
-/// getRotation() and wasButtonPressed().
+/// getRotation(), wasButtonPressed(), and wasLongPressed().
 class EncoderInput {
 public:
     /// Attach to hardware pins and set up pull-ups.
@@ -17,8 +17,13 @@ public:
     /// Positive = clockwise, negative = counter-clockwise.
     int8_t getRotation();
 
-    /// Returns true exactly once per debounced button press (auto-clears).
+    /// Returns true exactly once per debounced short press (auto-clears).
+    /// A short press is released before LONG_PRESS_MS elapses.
     bool wasButtonPressed();
+
+    /// Returns true exactly once when button has been held for LONG_PRESS_MS
+    /// (fires while still held, auto-clears).
+    bool wasLongPressed();
 
 private:
     uint8_t  _clkPin       = 0;
@@ -28,11 +33,14 @@ private:
     uint8_t  _lastClk      = 0;
     int8_t   _pendingSteps = 0;
 
-    bool     _lastSwRaw    = true;   // HIGH = not pressed (pull-up idle)
-    bool     _buttonState  = false;  // Debounced pressed state
-    bool     _pendingPress = false;  // One-shot press flag
-    uint32_t _debounceTime = 0;
+    bool     _lastSwRaw       = true;   // HIGH = not pressed (pull-up idle)
+    bool     _buttonState     = false;  // Debounced pressed state
+    bool     _pendingPress    = false;  // One-shot short-press flag
+    bool     _pendingLong     = false;  // One-shot long-press flag
+    bool     _longFired       = false;  // Guard: long press fired during this hold
+    uint32_t _debounceTime    = 0;
+    uint32_t _pressStartTime  = 0;
 
-    static constexpr uint32_t DEBOUNCE_MS = 30;
+    static constexpr uint32_t DEBOUNCE_MS   = 30;
+    static constexpr uint32_t LONG_PRESS_MS = 2000;  // 2 s hold = trigger scan
 };
-
