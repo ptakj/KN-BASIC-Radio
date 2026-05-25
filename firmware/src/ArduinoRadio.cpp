@@ -7,11 +7,15 @@
 // ---------------------------------------------------------------------------
 
 void ArduinoRadio::begin() {
+    Serial.begin(9600);
+
     _display.begin();
-    _encoder.begin(2, 3, 4); // CLK = D2, DT = D3, SW = D4
+    _encoder.begin(2, 3, 4); // CLK=D2, DT=D3, SW=D4
+
+    loadOrScan();  // Load from EEPROM or run first-boot scan
 
     _stationIndex = 0;
-    _radio.begin(StationList::at(0).frequency, 8);
+    _radio.setFrequency(stationFreq(0));
 
     enterState(State::IDLE);
 }
@@ -21,12 +25,80 @@ void ArduinoRadio::update() {
     uint32_t now = millis();
     _encoder.update();
 
+    // Serial JSON interface: always active
+    StationStore::handleSerial(_scannedFreqs, _scannedCount);
+
     switch (_state) {
-        case State::IDLE:   updateIdle(now);   break;
-        case State::TUNING: updateTuning(now); break;
-        case State::VOLUME: updateVolume(now); break;
+        case State::IDLE:     updateIdle(now);     break;
+        case State::TUNING:   updateTuning(now);   break;
+        case State::VOLUME:   updateVolume(now);   break;
         case State::SCANNING: updateScanning(now); break;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Private – boot / scan helpers
+// ---------------------------------------------------------------------------
+
+void ArduinoRadio::loadOrScan() {
+    if (StationStore::hasValidData()) {
+        // --- Fast path: restore last scan from EEPROM ---
+        _scannedCount = StationStore::load(_scannedFreqs, FMRadio::MAX_STORED);
+        if (_scannedCount > 0) return;
+    }
+
+    // --- Slow path: autoscan (blocking startup scan) ---
+    _display.setLine(0, "Skanowanie...");
+    _display.setLine(1, "Prosze czekac");
+
+    _radio.begin(8700, 8);
+    _radio.autoScan();
+
+    // Spin until scan finishes (FMRadio::update() drives the state machine)
+    while (_radio.getScanState() != FMRadio::IDLE) {
+        _radio.update();
+
+        // Update display with live count
+        char buf[17];
+        sprintf(buf, "Znaleziono: %d", _radio.getTotalFound());
+        _display.setLine(1, buf);
+    }
+
+    applyScannedStations();
+}
+
+void ArduinoRadio::applyScannedStations() {
+    _scannedCount = _radio.getTotalFound();
+    for (uint8_t i = 0; i < _scannedCount; ++i) {
+        _scannedFreqs[i] = _radio.getStoredStation(i);
+    }
+
+    // Persist to EEPROM so next boot is instant
+    if (_scannedCount > 0) {
+        StationStore::save(_scannedFreqs, _scannedCount);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Private – station navigation helpers
+// ---------------------------------------------------------------------------
+
+uint8_t ArduinoRadio::stationCount() const {
+    return (_scannedCount > 0) ? _scannedCount : StationList::size();
+}
+
+uint16_t ArduinoRadio::stationFreq(uint8_t index) const {
+    if (_scannedCount > 0) {
+        return (index < _scannedCount) ? _scannedFreqs[index] : _scannedFreqs[0];
+    }
+    return StationList::at(index).frequency;
+}
+
+const char* ArduinoRadio::stationName(uint8_t index) const {
+    // When using scanned stations we don't have preset names,
+    // so return an empty string and let drawTuning show the frequency.
+    if (_scannedCount > 0) return "";
+    return StationList::at(index).name;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,12 +121,22 @@ void ArduinoRadio::enterState(State newState) {
         case State::VOLUME:
             drawVolume();
             break;
-        default:
+        case State::SCANNING:
+            _display.setLine(0, "Skanowanie...");
+            _display.setLine(1, "Przytrzymaj=anuluj");
             break;
     }
 }
 
 void ArduinoRadio::updateIdle(uint32_t now) {
+    // Long press → manual re-scan
+    if (_encoder.wasLongPressed()) {
+        StationStore::invalidate();
+        _radio.autoScan();
+        enterState(State::SCANNING);
+        return;
+    }
+
     if (_encoder.wasButtonPressed()) {
         enterState(State::TUNING);
         return;
@@ -75,27 +157,33 @@ void ArduinoRadio::updateIdle(uint32_t now) {
     }
 }
 
-
 void ArduinoRadio::updateScanning(uint32_t now) {
     if (_radio.getScanState() == FMRadio::IDLE) {
-        if (_radio.getTotalFound() > 0) {
-            _stationIndex = 0;
-            _radio.setFrequency(_radio.getStoredStation(0));
+        applyScannedStations();
+        _stationIndex = 0;
+        if (_scannedCount > 0) {
+            _radio.setFrequency(_scannedFreqs[0]);
         }
-        enterState(State::TUNING); 
+        enterState(State::TUNING);
+        return;
     }
 
-    if (now - _stateTimer >= 200) {
-        _display.setLine(0, "Skanowanie...");
-        char buf[17];
-        sprintf(buf, "Znaleziono: %d", _radio.getTotalFound());
-        _display.setLine(1, buf);
+    // Refresh progress display every 200 ms
+    if ((uint32_t)(now - _stateTimer) >= 200) {
         _stateTimer = now;
+        drawScanProgress();
     }
 }
 
-
 void ArduinoRadio::updateTuning(uint32_t now) {
+    // Long press → manual re-scan
+    if (_encoder.wasLongPressed()) {
+        StationStore::invalidate();
+        _radio.autoScan();
+        enterState(State::SCANNING);
+        return;
+    }
+
     if (_encoder.wasButtonPressed()) {
         enterState(State::IDLE);
         return;
@@ -103,17 +191,16 @@ void ArduinoRadio::updateTuning(uint32_t now) {
 
     int8_t rot = _encoder.getRotation();
     if (rot != 0) {
+        uint8_t total = stationCount();
         if (rot > 0) {
-            _stationIndex = (_stationIndex + 1) % StationList::size();
+            _stationIndex = (_stationIndex + 1) % total;
         } else {
-            _stationIndex = (_stationIndex == 0)
-                ? StationList::size() - 1
-                : _stationIndex - 1;
+            _stationIndex = (_stationIndex == 0) ? (total - 1) : (_stationIndex - 1);
         }
-        _radio.setFrequency(StationList::at(_stationIndex).frequency);
-        _rdsText[0]   = '\0'; // Clear stale RDS for the new station
+        _radio.setFrequency(stationFreq(_stationIndex));
+        _rdsText[0]   = '\0';
         _rdsScrollPos = 0;
-        _stateTimer   = now;  // Reset inactivity timeout
+        _stateTimer   = now;
         drawTuning();
     }
 
@@ -131,7 +218,7 @@ void ArduinoRadio::updateVolume(uint32_t now) {
     int8_t rot = _encoder.getRotation();
     if (rot != 0) {
         _radio.volumeStep(rot > 0 ? 1 : -1);
-        _stateTimer = now; // Reset inactivity timeout
+        _stateTimer = now;
         drawVolume();
     }
 
@@ -140,43 +227,60 @@ void ArduinoRadio::updateVolume(uint32_t now) {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Private – display helpers
 // ---------------------------------------------------------------------------
 
 void ArduinoRadio::drawIdle() {
-    _display.setLine(0, StationList::at(_stationIndex).name);
+    // Line 0: station name (from preset) OR frequency (for scanned stations)
+    if (_scannedCount > 0) {
+        char freqLine[17] = {};
+        formatFreq(stationFreq(_stationIndex), freqLine, sizeof(freqLine));
+        _display.setLine(0, freqLine);
+    } else {
+        _display.setLine(0, StationList::at(_stationIndex).name);
+    }
 
+    // Line 1: RDS radio text (scrolling), or frequency
     char infoLine[17] = {};
     uint8_t rdsLen = static_cast<uint8_t>(strlen(_rdsText));
 
     if (rdsLen == 0) {
-        // No RDS yet – show the tuned frequency
         formatFreq(_radio.getFrequency(), infoLine, sizeof(infoLine));
     } else if (rdsLen <= 16) {
         strncpy(infoLine, _rdsText, 16);
         infoLine[16] = '\0';
     } else {
-        // Scrolling window into the RDS text
         strncpy(infoLine, _rdsText + _rdsScrollPos, 16);
         infoLine[16] = '\0';
     }
-
     _display.setLine(1, infoLine);
 }
 
 void ArduinoRadio::drawTuning() {
-    const Station& st = StationList::at(_stationIndex);
-    _display.setLine(0, st.name);
-
     char freqLine[17] = {};
-    formatFreq(st.frequency, freqLine, sizeof(freqLine));
+    formatFreq(stationFreq(_stationIndex), freqLine, sizeof(freqLine));
+
+    if (_scannedCount > 0) {
+        // No preset name – show index/total on line 0
+        char indexLine[17] = {};
+        sprintf(indexLine, "St. %d/%d", _stationIndex + 1, _scannedCount);
+        _display.setLine(0, indexLine);
+    } else {
+        _display.setLine(0, StationList::at(_stationIndex).name);
+    }
     _display.setLine(1, freqLine);
 }
 
 void ArduinoRadio::drawVolume() {
     _display.showVolume(_radio.getVolume());
+}
+
+void ArduinoRadio::drawScanProgress() {
+    _display.setLine(0, "Skanowanie...");
+    char buf[17];
+    sprintf(buf, "Znaleziono: %d", _radio.getTotalFound());
+    _display.setLine(1, buf);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,15 +309,13 @@ void ArduinoRadio::refreshRDS() {
 // ---------------------------------------------------------------------------
 
 void ArduinoRadio::formatFreq(uint16_t freq, char* buf, uint8_t bufSize) {
-    if (bufSize < 10) {  // Need at least "NNN.N MHz\0" = 10 chars
+    if (bufSize < 10) {
         if (buf && bufSize > 0) buf[0] = '\0';
         return;
     }
-
     uint16_t mhz = freq / 100;
     uint8_t  dec = static_cast<uint8_t>((freq % 100) / 10);
-
-    uint8_t i = 0;
+    uint8_t  i   = 0;
     if (mhz >= 100) {
         buf[i++] = static_cast<char>('0' + mhz / 100);
         buf[i++] = static_cast<char>('0' + (mhz % 100) / 10);
@@ -230,21 +332,4 @@ void ArduinoRadio::formatFreq(uint16_t freq, char* buf, uint8_t bufSize) {
     buf[i++] = 'H';
     buf[i++] = 'z';
     buf[i]   = '\0';
-}
-
-void ArduinoRadio::selectNextStation(int8_t direction) {
-
-    uint8_t total = _radio.getTotalFound();
-    if (total == 0) return;
-
-    if (direction > 0) {
-        _stationIndex = (_stationIndex + 1) % total;
-    } else {
-        _stationIndex = (_stationIndex == 0) ? (total - 1) : (_stationIndex - 1);
-    }
-    uint16_t freq = _radio.getStoredStation(_stationIndex);
-    _radio.setFrequency(freq);
-    _stateTimer = millis();
-    
-    _rdsText[0] = '\0';
 }
