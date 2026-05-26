@@ -21,17 +21,21 @@ void EncoderInput::begin(uint8_t clkPin, uint8_t dtPin, uint8_t swPin) {
 }
 
 void EncoderInput::update() {
+    uint32_t now = millis();
     // --- Rotary encoder ---
     uint8_t clk = digitalRead(_clkPin);
     if (clk != _lastClk) {
-        if (digitalRead(_dtPin) != clk) ++_pendingSteps;
-        else                            --_pendingSteps;
         _lastClk = clk;
+        if (clk == HIGH && (uint32_t)(now - _lastRotTime) >= ROT_DEBOUNCE_MS) {
+            if (digitalRead(_dtPin) != clk)
+                ++_pendingSteps;
+            else
+                --_pendingSteps;
+        }
     }
 
     // --- Button with debounce + long-press detection ---
     bool swRaw = (digitalRead(_swPin) == LOW);
-    uint32_t now = millis();
 
     if (swRaw != _lastSwRaw) {
         _lastSwRaw    = swRaw;

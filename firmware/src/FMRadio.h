@@ -1,51 +1,39 @@
 #pragma once
 #include <RDA5807.h>
 #include <stdint.h>
+#include <ArduinoLog.h>
 
-/// Wrapper around the RDA5807 FM tuner chip.
-/// Manages frequency, volume, RDS data retrieval, seek and auto-scan.
 class FMRadio {
 public:
     enum ScanState { IDLE, START_SCAN, SEEKING, EVALUATING };
 
     static constexpr uint8_t  VOLUME_MIN   = 0;
     static constexpr uint8_t  VOLUME_MAX   = 15;
-    static constexpr uint8_t  MAX_STORED   = 20;  ///< Max stations kept in RAM/EEPROM
+    static constexpr uint8_t  MAX_STORED   = 20;
 
     ScanState getScanState() const { return _scanState; }
 
-    /// Initialise the chip and tune to startFreq with given volume.
     void     begin(uint16_t startFreq, uint8_t startVolume = 8);
-
-    /// Non-blocking scan state machine driver – call every loop().
     void     update();
-
-    /// Tune to a frequency (MHz × 100, clamped to valid FM band).
     void     setFrequency(uint16_t freq);
     uint16_t getFrequency() const;
 
-    /// Set absolute volume (clamped to VOLUME_MIN…VOLUME_MAX).
     void    setVolume(uint8_t vol);
-    /// Step volume up (+1) or down (-1), clamped at limits.
     void    volumeStep(int8_t direction);
     uint8_t getVolume() const;
+    int8_t  getRSSI();
 
-    int8_t getRSSI();
-
-    /// Copy the RDS Program Service name (8 chars) into buffer.
     bool getRDSStationName(char* buffer, uint8_t bufSize);
-
-    /// Copy the RDS Radio Text (up to 64 chars) into buffer.
     bool getRDSProgramInfo(char* buffer, uint8_t bufSize);
+    
+    // Nowa metoda wyciągająca pełną datę i czas
+    bool getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_t& hour, uint8_t& minute);
 
-    /// Single seek step (up = true / down = false).  Blocking ~100 ms.
     void seek(bool up);
-
-    /// Start a non-blocking full-band auto-scan (driven by update()).
     void autoScan();
 
-    uint8_t  getTotalFound()                    const { return _totalFound; }
-    uint16_t getStoredStation(uint8_t index)    const {
+    uint8_t  getTotalFound() const { return _totalFound; }
+    uint16_t getStoredStation(uint8_t index) const {
         return (index < _totalFound) ? _foundStations[index] : FREQ_MIN;
     }
 
@@ -54,8 +42,8 @@ private:
     uint16_t _frequency = 0;
     uint8_t  _volume    = 8;
 
-    static constexpr uint16_t FREQ_MIN = 8700;   // 87.0 MHz
-    static constexpr uint16_t FREQ_MAX = 10800;  // 108.0 MHz
+    static constexpr uint16_t FREQ_MIN = 8700;
+    static constexpr uint16_t FREQ_MAX = 10800;
 
     uint16_t  _foundStations[MAX_STORED] = {};
     uint8_t   _totalFound   = 0;

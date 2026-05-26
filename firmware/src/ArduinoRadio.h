@@ -1,10 +1,13 @@
 #pragma once
+#include <Arduino.h>
 #include <stdint.h>
+#include <ArduinoLog.h>
 #include "FMRadio.h"
 #include "LCDDisplay.h"
 #include "EncoderInput.h"
 #include "StationList.h"
 #include "StationStore.h"
+#include "KNXRadioControl.h"
 
 /// Top-level application controller for the KN-BASIC FM radio.
 ///
@@ -41,6 +44,7 @@ private:
     FMRadio      _radio;
     LCDDisplay   _display;
     EncoderInput _encoder;
+    KNXRadioControl _knx;
 
     State    _state        = State::IDLE;
     uint8_t  _stationIndex = 0;
@@ -52,6 +56,7 @@ private:
 
     // RDS state (only used in IDLE)
     char     _rdsText[65]        = {};
+    char     _rdsPS[9]           = {};
     uint8_t  _rdsScrollPos       = 0;
     uint32_t _rdsScrollTimer     = 0;
 
@@ -76,6 +81,8 @@ private:
     void drawTuning();
     void drawVolume();
     void drawScanProgress();
+    void formatFreqShort(uint16_t freq, char* buf);
+    void buildNameFreqLine(uint8_t index, char* out);
 
     // --- RDS ---
     void refreshRDS();

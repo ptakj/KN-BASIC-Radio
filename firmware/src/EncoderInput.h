@@ -40,6 +40,8 @@ private:
     bool     _longFired       = false;  // Guard: long press fired during this hold
     uint32_t _debounceTime    = 0;
     uint32_t _pressStartTime  = 0;
+    uint32_t _lastRotTime = 0;
+    static constexpr uint32_t ROT_DEBOUNCE_MS = 4; // 4 ms eliminuje większość drgań
 
     static constexpr uint32_t DEBOUNCE_MS   = 30;
     static constexpr uint32_t LONG_PRESS_MS = 2000;  // 2 s hold = trigger scan

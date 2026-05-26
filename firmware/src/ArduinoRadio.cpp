@@ -8,14 +8,18 @@
 
 void ArduinoRadio::begin() {
     Serial.begin(9600);
+    Log.begin(LOG_LEVEL_VERBOSE, &Serial);
 
     _display.begin();
     _encoder.begin(2, 3, 4); // CLK=D2, DT=D3, SW=D4
 
+    _radio.begin(8700, 8);
     loadOrScan();  // Load from EEPROM or run first-boot scan
 
     _stationIndex = 0;
     _radio.setFrequency(stationFreq(0));
+
+    _knx.begin();
 
     enterState(State::IDLE);
 }
@@ -34,6 +38,8 @@ void ArduinoRadio::update() {
         case State::VOLUME:   updateVolume(now);   break;
         case State::SCANNING: updateScanning(now); break;
     }
+
+    _knx.update(&_radio);
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +57,6 @@ void ArduinoRadio::loadOrScan() {
     _display.setLine(0, "Skanowanie...");
     _display.setLine(1, "Prosze czekac");
 
-    _radio.begin(8700, 8);
     _radio.autoScan();
 
     // Spin until scan finishes (FMRadio::update() drives the state machine)
@@ -199,6 +204,7 @@ void ArduinoRadio::updateTuning(uint32_t now) {
         }
         _radio.setFrequency(stationFreq(_stationIndex));
         _rdsText[0]   = '\0';
+        _rdsPS[0]     = '\0';
         _rdsScrollPos = 0;
         _stateTimer   = now;
         drawTuning();
@@ -232,44 +238,40 @@ void ArduinoRadio::updateVolume(uint32_t now) {
 // ---------------------------------------------------------------------------
 
 void ArduinoRadio::drawIdle() {
-    // Line 0: station name (from preset) OR frequency (for scanned stations)
-    if (_scannedCount > 0) {
-        char freqLine[17] = {};
-        formatFreq(stationFreq(_stationIndex), freqLine, sizeof(freqLine));
-        _display.setLine(0, freqLine);
-    } else {
-        _display.setLine(0, StationList::at(_stationIndex).name);
-    }
+    char line0[17] = {};
+    buildNameFreqLine(_stationIndex, line0);
+    _display.setLine(0, line0);
 
-    // Line 1: RDS radio text (scrolling), or frequency
-    char infoLine[17] = {};
+    // Wiersz 1: RDS (przewijany) lub czysta częstotliwość gdy brak RDS
+    char line1[17] = {};
     uint8_t rdsLen = static_cast<uint8_t>(strlen(_rdsText));
 
     if (rdsLen == 0) {
-        formatFreq(_radio.getFrequency(), infoLine, sizeof(infoLine));
+        // Brak RDS – pokaż samą częstotliwość wyśrodkowaną
+        formatFreq(_radio.getFrequency(), line1, sizeof(line1));
     } else if (rdsLen <= 16) {
-        strncpy(infoLine, _rdsText, 16);
-        infoLine[16] = '\0';
+        strncpy(line1, _rdsText, 16);
+        line1[16] = '\0';
     } else {
-        strncpy(infoLine, _rdsText + _rdsScrollPos, 16);
-        infoLine[16] = '\0';
+        strncpy(line1, _rdsText + _rdsScrollPos, 16);
+        line1[16] = '\0';
     }
-    _display.setLine(1, infoLine);
+    _display.setLine(1, line1);
 }
 
 void ArduinoRadio::drawTuning() {
-    char freqLine[17] = {};
-    formatFreq(stationFreq(_stationIndex), freqLine, sizeof(freqLine));
+    char line0[17] = {};
+    buildNameFreqLine(_stationIndex, line0);
+    _display.setLine(0, line0);
 
+    // Wiersz 1: indeks stacji (dla skanowanych) lub pusta linia
     if (_scannedCount > 0) {
-        // No preset name – show index/total on line 0
         char indexLine[17] = {};
         sprintf(indexLine, "St. %d/%d", _stationIndex + 1, _scannedCount);
-        _display.setLine(0, indexLine);
+        _display.setLine(1, indexLine);
     } else {
-        _display.setLine(0, StationList::at(_stationIndex).name);
+        _display.setLine(1, "");
     }
-    _display.setLine(1, freqLine);
 }
 
 void ArduinoRadio::drawVolume() {
@@ -288,11 +290,47 @@ void ArduinoRadio::drawScanProgress() {
 // ---------------------------------------------------------------------------
 
 void ArduinoRadio::refreshRDS() {
-    char newText[65] = {};
-    if (!_radio.getRDSProgramInfo(newText, sizeof(newText))) return;
+    // --- Program Service (nazwa stacji, max 8 znaków) ---
+    char psRaw[9] = {};
+    if (_radio.getRDSStationName(psRaw, sizeof(psRaw))) {
+        char psClean[9] = {};
+        uint8_t w = 0;
+        for (uint8_t i = 0; i < 8 && psRaw[i] != '\0'; ++i) {
+            char c = psRaw[i];
+            if (c >= 0x20 && c < 0x7F) psClean[w++] = c;
+        }
+        // Usuń spacje z prawej strony
+        while (w > 0 && psClean[w - 1] == ' ') --w;
+        psClean[w] = '\0';
 
-    if (strcmp(_rdsText, newText) != 0) {
-        strncpy(_rdsText, newText, sizeof(_rdsText) - 1);
+        if (w > 0 && strcmp(_rdsPS, psClean) != 0) {
+            strncpy(_rdsPS, psClean, sizeof(_rdsPS) - 1);
+            _rdsPS[sizeof(_rdsPS) - 1] = '\0';
+        }
+    }
+
+    // --- Radio Text (aktualny utwór / info, max 64 znaki) ---
+    char rtRaw[65] = {};
+    if (!_radio.getRDSProgramInfo(rtRaw, sizeof(rtRaw))) return;
+
+    // Sanityzacja: tylko printable ASCII, stop na 0x0D (RDS end-of-text)
+    char rtClean[65] = {};
+    uint8_t w = 0;
+    for (uint8_t i = 0; i < 64 && rtRaw[i] != '\0'; ++i) {
+        char c = rtRaw[i];
+        if (c == 0x0D) break;           // marker końca RT w standardzie RDS
+        if (c >= 0x20 && c < 0x7F) {   // tylko drukowalne ASCII
+            rtClean[w++] = c;
+        }
+    }
+    // Usuń spacje z prawej strony
+    while (w > 0 && rtClean[w - 1] == ' ') --w;
+    rtClean[w] = '\0';
+
+    if (w == 0) return;   // nic wartościowego – nie aktualizuj
+
+    if (strcmp(_rdsText, rtClean) != 0) {
+        strncpy(_rdsText, rtClean, sizeof(_rdsText) - 1);
         _rdsText[sizeof(_rdsText) - 1] = '\0';
         _rdsScrollPos = 0;
     } else {
@@ -332,4 +370,48 @@ void ArduinoRadio::formatFreq(uint16_t freq, char* buf, uint8_t bufSize) {
     buf[i++] = 'H';
     buf[i++] = 'z';
     buf[i]   = '\0';
+}
+
+// Wpisuje do buf dokładnie 8 znaków: " 96.0MHz" lub "100.0MHz"
+void ArduinoRadio::formatFreqShort(uint16_t freq, char* buf) {
+    uint16_t mhz = freq / 100;
+    uint8_t  dec = (freq % 100) / 10;
+    if (mhz < 100) {
+        buf[0] = ' ';
+        buf[1] = '0' + (mhz / 10);
+        buf[2] = '0' + (mhz % 10);
+    } else {
+        buf[0] = '0' + (mhz / 100);
+        buf[1] = '0' + ((mhz % 100) / 10);
+        buf[2] = '0' + (mhz % 10);
+    }
+    buf[3] = '.';
+    buf[4] = '0' + dec;
+    buf[5] = 'M';
+    buf[6] = 'H';
+    buf[7] = 'z';
+    buf[8] = '\0';
+}
+
+// Buduje "NazwaXXX 96.0MHz" (dokładnie 16 znaków)
+void ArduinoRadio::buildNameFreqLine(uint8_t index, char* out) {
+    // Wybierz źródło nazwy:
+    //   preset → StationList
+    //   skanowana → RDS PS (jeśli już odebrano), w przeciwnym razie puste
+    const char* name;
+    if (_scannedCount > 0) {
+        name = (_rdsPS[0] != '\0') ? _rdsPS : "--------";
+        //                                      ^^^^^^^^
+        //                                      placeholder zanim RDS nadejdzie
+    } else {
+        name = StationList::at(index).name;
+    }
+
+    // Lewa część: 8 znaków, wyrównana do lewej, dopełniona spacjami
+    uint8_t i = 0;
+    for (; i < 8 && name[i] != '\0'; ++i) out[i] = name[i];
+    for (; i < 8; ++i)                    out[i] = ' ';
+
+    // Prawa część: 8 znaków częstotliwości
+    formatFreqShort(stationFreq(index), out + 8);
 }
