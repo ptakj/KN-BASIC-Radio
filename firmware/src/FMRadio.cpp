@@ -65,6 +65,8 @@ void FMRadio::begin(uint16_t startFreq, uint8_t startVolume) {
     _radio.setVolume(_volume);
     _radio.setMute(false);
     setFrequency(startFreq);
+
+    autoScan();
 }
 
 void FMRadio::setFrequency(uint16_t freq) {
@@ -97,6 +99,12 @@ bool FMRadio::getRDSStationName(char* buffer, uint8_t bufSize) {
     if (!_radio.getRdsReady()) return false;
     char* ps = _radio.getRdsStationName();
     if (!ps || ps[0] == '\0') return false;
+
+    while (*ps == ' ') {
+        ps++;
+    }
+
+    
     if (ps[0] < 32 || ps[0] > 126) return false;
     strncpy(buffer, ps, bufSize - 1);
     buffer[bufSize - 1] = '\0';
