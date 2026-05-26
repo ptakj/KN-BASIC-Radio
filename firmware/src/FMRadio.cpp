@@ -72,6 +72,7 @@ void FMRadio::setFrequency(uint16_t freq) {
     if (freq > FREQ_MAX) freq = FREQ_MAX;
     _frequency = freq;
     _radio.setFrequency(_frequency);
+    _radio.clearRdsBuffer();
 }
 
 uint16_t FMRadio::getFrequency() const { return _frequency; }
@@ -96,6 +97,7 @@ bool FMRadio::getRDSStationName(char* buffer, uint8_t bufSize) {
     if (!_radio.getRdsReady()) return false;
     char* ps = _radio.getRdsStationName();
     if (!ps || ps[0] == '\0') return false;
+    if (ps[0] < 32 || ps[0] > 126) return false;
     strncpy(buffer, ps, bufSize - 1);
     buffer[bufSize - 1] = '\0';
     return true;
@@ -107,9 +109,20 @@ bool FMRadio::getRDSProgramInfo(char* buffer, uint8_t bufSize) {
     if (!_radio.getRdsReady()) return false;
     char* rt = _radio.getRdsProgramInformation();
     if (!rt || rt[0] == '\0') return false;
-    strncpy(buffer, rt, bufSize - 1);
-    buffer[bufSize - 1] = '\0';
-    return true;
+    // ZMIANA: Zastąp strncpy bezpiecznym filtrem znaków ASCII
+    uint8_t i = 0;
+    while (rt[i] != '\0' && i < (bufSize - 1)) {
+        // Akceptuj tylko standardowe znaki drukowalne (od spacji do tyldy)
+        if (rt[i] >= 32 && rt[i] <= 126) {
+            buffer[i] = rt[i];
+        } else {
+            buffer[i] = ' '; // Zamień krzaczek na spację lub pomiń
+        }
+        i++;
+    }
+    buffer[i] = '\0';
+    
+    return (strlen(buffer) > 0);
 }
 
 bool FMRadio::getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_t& hour, uint8_t& minute) {
@@ -117,6 +130,13 @@ bool FMRadio::getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_
     char* t = _radio.getRdsTime();
     if (!t || strlen(t) < 16) return false; 
     
+
+    // ZMIANA: Szybka walidacja formatu "YYYY-MM-DD" przed obliczeniami
+    if (t[4] != '-' || t[7] != '-' || t[10] != ' ' || t[13] != ':') return false;
+    
+    // Dodatkowa weryfikacja czy podstawowe znaki to cyfry
+    if (t[2] < '0' || t[2] > '9' || t[5] < '0' || t[5] > '9' || t[8] < '0' || t[8] > '9') return false;
+
     // Format PU2CLR: "YYYY-MM-DD HH:MM"
     year   = (t[2] - '0') * 10 + (t[3] - '0');
     month  = (t[5] - '0') * 10 + (t[6] - '0');
