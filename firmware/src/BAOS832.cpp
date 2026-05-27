@@ -40,6 +40,10 @@ int16_t BAOS832::checkMessages(uint8_t *payloadBuffer, uint8_t *payloadSize) {
                 payloadBuffer[i] = rawFrame[i + 2];
             }
             
+            if (subService == SUB_SET_DP_VALUE_RES || subService == SUB_GET_DP_VALUE_RES) {
+                return -1;
+            }
+
             return subService; 
         } else {
             Log.warning(F("BAOS: Received unexpected data message frame. MainService: 0x%X" CR), rawFrame[0]);

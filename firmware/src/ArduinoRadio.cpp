@@ -14,7 +14,7 @@ void ArduinoRadio::begin() {
     _encoder.begin(2, 3, 4); // CLK=D2, DT=D3, SW=D4
 
     _radio.begin(8700, 8);
-    loadOrScan();  // Load from EEPROM or run first-boot scan
+    loadOrScan(true);  // Load from EEPROM or run first-boot scan
 
     _stationIndex = 0;
     _radio.setFrequency(stationFreq(0));
@@ -46,8 +46,8 @@ void ArduinoRadio::update() {
 // Private – boot / scan helpers
 // ---------------------------------------------------------------------------
 
-void ArduinoRadio::loadOrScan() {
-    if (StationStore::hasValidData()) {
+void ArduinoRadio::loadOrScan(bool onlyScan) {
+    if (StationStore::hasValidData() && !onlyScan) {
         // --- Fast path: restore last scan from EEPROM ---
         _scannedCount = StationStore::load(_scannedFreqs, FMRadio::MAX_STORED);
         if (_scannedCount > 0) return;
@@ -69,17 +69,17 @@ void ArduinoRadio::loadOrScan() {
         _display.setLine(1, buf);
     }
 
-    applyScannedStations();
+    applyScannedStations(onlyScan);
 }
 
-void ArduinoRadio::applyScannedStations() {
+void ArduinoRadio::applyScannedStations(bool onlyScan) {
     _scannedCount = _radio.getTotalFound();
     for (uint8_t i = 0; i < _scannedCount; ++i) {
         _scannedFreqs[i] = _radio.getStoredStation(i);
     }
 
     // Persist to EEPROM so next boot is instant
-    if (_scannedCount > 0) {
+    if (_scannedCount > 0 && !onlyScan) {
         StationStore::save(_scannedFreqs, _scannedCount);
     }
 }

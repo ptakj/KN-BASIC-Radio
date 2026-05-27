@@ -25,8 +25,12 @@ void KNXRadioControl::update(FMRadio* radio) {
     uint8_t payload[128];
     uint8_t size = 0;
     int16_t msgType = baos_.checkMessages(payload, &size);
+    if (msgType == 0x00) {
+        baos_.begin();
+        return;
+    }
 
-    if (msgType == BAOS832::SUB_SET_DP_VALUE_REQ || msgType == BAOS832::SUB_DP_VALUE_IND) {
+    if (msgType == BAOS832::SUB_DP_VALUE_IND) {
         if (size >= 4) {
             uint16_t count = (payload[2] << 8) | payload[3];
             uint8_t offset = 4;
@@ -58,20 +62,21 @@ void KNXRadioControl::update(FMRadio* radio) {
         if (currentVol != _lastVol) {
             _lastVol = currentVol;
             uint8_t valPercent = (currentVol * 100) / FMRadio::VOLUME_MAX;
-            baos_.setDatapointValue(DP_CMD_VOL_ABS, 0x01, &valPercent, 1);
+            baos_.setDatapointValue(DP_CMD_VOL_ABS, 0x03, &valPercent, 1);
         }
 
         int8_t currentRssi = radio->getRSSI();
         if (abs(currentRssi - _lastRssi) > 2) { 
             _lastRssi = currentRssi;
             uint8_t rssiU8 = static_cast<uint8_t>(currentRssi);
-            baos_.setDatapointValue(DP_STAT_RSSI, 0x01, &rssiU8, 1);
+            baos_.setDatapointValue(DP_STAT_RSSI, 0x03, &rssiU8, 1);
         }
 
         char currentStation[15] = {0};
         if (radio->getRDSStationName(currentStation, sizeof(currentStation))) {
             if (strcmp(currentStation, _lastStation) != 0) {
                 strncpy(_lastStation, currentStation, sizeof(_lastStation));
+                _lastStation[sizeof(_lastStation) - 1] = '\0';
                 sendStringDPT16(DP_STAT_STATION, _lastStation, 0);
             }
         }
@@ -105,7 +110,7 @@ void KNXRadioControl::update(FMRadio* radio) {
         if (now - _lastRdsScrollMs >= SCROLL_INTERVAL_MS) {
             _lastRdsScrollMs = now;
             _rdsScrollOffset++;
-            if (_rdsScrollOffset > textLen) _rdsScrollOffset = 0; 
+            if (_rdsScrollOffset >= textLen) _rdsScrollOffset = 0; 
             sendStringDPT16(DP_STAT_RDS_TEXT, _lastRdsText, _rdsScrollOffset);
         }
     }
@@ -132,13 +137,13 @@ void KNXRadioControl::sendStringDPT16(uint16_t dpId, const char* str, uint8_t st
     } else {
         buffer[0] = ' '; // Odstęp zanim tekst wróci na początek
     }
-    baos_.setDatapointValue(dpId, 0x01, buffer, 14);
+    baos_.setDatapointValue(dpId, 0x03, buffer, 14);
 }
 
 void KNXRadioControl::sendFloatDPT9(uint16_t dpId, float value) {
     uint8_t buffer[2];
     floatToF16(value, buffer);
-    baos_.setDatapointValue(dpId, 0x01, buffer, 2);
+    baos_.setDatapointValue(dpId, 0x03, buffer, 2);
 }
 
 void KNXRadioControl::sendTimeDPT10(uint16_t dpId, uint8_t hour, uint8_t minute, uint8_t second) {
@@ -146,7 +151,7 @@ void KNXRadioControl::sendTimeDPT10(uint16_t dpId, uint8_t hour, uint8_t minute,
     buffer[0] = hour & 0x1F; 
     buffer[1] = minute & 0x3F;
     buffer[2] = second & 0x3F;
-    baos_.setDatapointValue(dpId, 0x01, buffer, 3);
+    baos_.setDatapointValue(dpId, 0x03, buffer, 3);
 }
 
 void KNXRadioControl::sendDateDPT11(uint16_t dpId, uint8_t day, uint8_t month, uint8_t year) {
@@ -154,7 +159,7 @@ void KNXRadioControl::sendDateDPT11(uint16_t dpId, uint8_t day, uint8_t month, u
     buffer[0] = day & 0x1F; 
     buffer[1] = month & 0x0F;
     buffer[2] = year & 0x7F; 
-    baos_.setDatapointValue(dpId, 0x01, buffer, 3);
+    baos_.setDatapointValue(dpId, 0x03, buffer, 3);
 }
 
 void KNXRadioControl::floatToF16(float value, uint8_t* buffer) {

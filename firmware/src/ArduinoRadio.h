@@ -65,8 +65,8 @@ private:
     static constexpr uint32_t RDS_SCROLL_INTERVAL_MS =  400;
 
     // --- Boot helpers ---
-    void loadOrScan();   ///< Called from begin(): EEPROM load or fresh scan.
-    void applyScannedStations();
+    void loadOrScan(bool onlyScan = false);   ///< Called from begin(): EEPROM load or fresh scan.
+    void applyScannedStations(bool onlyScan = false);
 
     // --- State machine ---
     void enterState(State newState);
