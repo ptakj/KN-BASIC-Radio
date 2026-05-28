@@ -2,6 +2,7 @@
 #define BAOS832_H
 
 #include <Arduino.h>
+#include <ArduinoLog.h>
 #include "FT12.h"
 
 class BAOS832 {

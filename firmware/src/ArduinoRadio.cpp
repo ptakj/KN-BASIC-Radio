@@ -7,6 +7,9 @@
 // ---------------------------------------------------------------------------
 
 void ArduinoRadio::begin() {
+    Serial.begin(9600);
+    Log.begin(LOG_LEVEL_VERBOSE, &Serial);
+
     _display.begin();
     _encoder.begin(2, 3, 4); // CLK=D2, DT=D3, SW=D4
 
