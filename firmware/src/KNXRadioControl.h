@@ -18,7 +18,7 @@ public:
     static constexpr uint16_t DP_STAT_TIME        = 8;  // DPT 10.001
     static constexpr uint16_t DP_STAT_DATE        = 9;  // DPT 11.001
 
-    KNXRadioControl(uint8_t rxPin = 6, uint8_t txPin = 5);
+    KNXRadioControl();
     ~KNXRadioControl();
 
     bool begin();

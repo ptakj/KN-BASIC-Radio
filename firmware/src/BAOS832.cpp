@@ -1,6 +1,6 @@
 #include "BAOS832.h"
 
-BAOS832::BAOS832(uint8_t rxPin, uint8_t txPin) : ft12_(rxPin, txPin) {
+BAOS832::BAOS832() : ft12_(Serial) {
     // Basic driver instantiation. Log setup is expected to be done in main setup()
 }
 

@@ -7,18 +7,34 @@ uint8_t FT12::calculateChecksum(const uint8_t data[], const uint8_t size, bool t
     return checksum;
 }
 
-FT12::FT12(uint8_t rxPin, uint8_t txPin) {
-    serial_ = new CustomSoftwareSerial(rxPin, txPin);
-    serial_->begin(BAUDRATE, CSERIAL_8E1);
-    serial_->setTimeout(STD_DELAY);
+FT12::FT12(HardwareSerial& serial) : serial_(&serial) {
 }
 
 FT12::~FT12() {
-    serial_->end();
+    if (initialized_) {
+        serial_->end();
+    }
+}
+
+void FT12::ensureInitialized() {
+    if (initialized_) return;
+    serial_->begin(BAUDRATE, SERIAL_8E1);
+    serial_->setTimeout(STD_DELAY);
+    pinMode(ACK_LED_PIN, OUTPUT);
+    digitalWrite(ACK_LED_PIN, LOW);
+    initialized_ = true;
+}
+
+void FT12::blinkAckLed() {
+    digitalWrite(ACK_LED_PIN, HIGH);
+    delay(30);
+    digitalWrite(ACK_LED_PIN, LOW);
 }
 
 bool FT12::sendReset() {
-    serial_->write((const uint8_t *)&RST_REQ_FRAME, sizeof(RST_REQ_FRAME));
+    ensureInitialized();
+    const uint8_t resetReq[] = {0x10, 0x40, 0x40, 0x16};
+    serial_->write(resetReq, sizeof(resetReq));
     
     if (waitForAck()) {
         currentHostCr_ = ODD_HOST_CR;
@@ -30,6 +46,7 @@ bool FT12::sendReset() {
 }
 
 bool FT12::sendDataFrame(const uint8_t data[], const uint8_t size) {
+    ensureInitialized();
     if (7 + size > MAX_BUFFER)
         return false;
 
@@ -58,6 +75,7 @@ bool FT12::sendDataFrame(const uint8_t data[], const uint8_t size) {
 }
 
 int8_t FT12::readDataFrame(uint8_t *data, uint8_t *size) {
+    ensureInitialized();
     if (!serial_->available()) 
         return -1;
 
@@ -65,9 +83,7 @@ int8_t FT12::readDataFrame(uint8_t *data, uint8_t *size) {
     if (serial_->readBytes(header, 4) != 4) 
         return -1;
 
-    uint32_t frame32;
-    memcpy(&frame32, header, 4);
-    if (resetTriggered(frame32)) {
+    if (resetTriggered(header)) {
         return 0;
     }
 
@@ -104,21 +120,30 @@ int8_t FT12::readDataFrame(uint8_t *data, uint8_t *size) {
 }
 
 bool FT12::waitForAck() {
+    ensureInitialized();
     unsigned long startMillis = millis();
 
-    while (!serial_->available())
-        if (millis() - startMillis > STD_DELAY)
-            return false;
-    
-    return (serial_->read() == ACK_FRAME);
+    while (millis() - startMillis <= STD_DELAY) {
+        if (!serial_->available()) continue;
+        if (serial_->read() == ACK_FRAME) {
+            blinkAckLed();
+            return true;
+        }
+    }
+    return false;
 }
 
 void FT12::sendAck() {
+    ensureInitialized();
     serial_->write(ACK_FRAME);
 }
 
-bool FT12::resetTriggered(const uint32_t frame) {
-    if (frame == RST_IND_FRAME) {
+bool FT12::resetTriggered(const uint8_t frame[4]) {
+    const uint8_t resetInd[] = {0x10, 0xC0, 0xC0, 0x16};
+    if (frame[0] == resetInd[0] &&
+        frame[1] == resetInd[1] &&
+        frame[2] == resetInd[2] &&
+        frame[3] == resetInd[3]) {
         currentHostCr_ = ODD_HOST_CR;
         currentServerCr_ = ODD_SERVER_CR;
         return true;

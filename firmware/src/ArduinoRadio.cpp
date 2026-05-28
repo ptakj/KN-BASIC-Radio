@@ -7,9 +7,6 @@
 // ---------------------------------------------------------------------------
 
 void ArduinoRadio::begin() {
-    Serial.begin(9600);
-    Log.begin(LOG_LEVEL_VERBOSE, &Serial);
-
     _display.begin();
     _encoder.begin(2, 3, 4); // CLK=D2, DT=D3, SW=D4
 
@@ -28,9 +25,6 @@ void ArduinoRadio::update() {
     _radio.update();
     uint32_t now = millis();
     _encoder.update();
-
-    // Serial JSON interface: always active
-    StationStore::handleSerial(_scannedFreqs, _scannedCount);
 
     switch (_state) {
         case State::IDLE:     updateIdle(now);     break;

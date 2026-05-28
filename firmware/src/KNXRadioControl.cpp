@@ -1,8 +1,8 @@
 #include "KNXRadioControl.h"
 #include <math.h>
 
-KNXRadioControl::KNXRadioControl(uint8_t rxPin, uint8_t txPin) 
-    : baos_(rxPin, txPin), 
+KNXRadioControl::KNXRadioControl()
+    : baos_(),
       _isConnected(false), _lastReconnectAttemptMs(0),
       _lastFreq(0), _lastVol(255), _lastRssi(-127), _lastPollMs(0),
       _rdsScrollOffset(0), _lastRdsScrollMs(0), 
@@ -51,9 +51,10 @@ void KNXRadioControl::update(FMRadio* radio) {
             uint16_t count = (payload[2] << 8) | payload[3];
             uint8_t offset = 4;
             
-            for (uint16_t i = 0; i < count && offset < size; i++) {
+            for (uint16_t i = 0; i < count && (offset + 4) <= size; i++) {
                 uint16_t dpId = (payload[offset] << 8) | payload[offset + 1];
                 uint8_t  len  = payload[offset + 3];
+                if ((offset + 4 + len) > size) break;
                 const uint8_t* valData = &payload[offset + 4];
                 
                 handleKnxCommand(radio, dpId, valData, len);

@@ -215,7 +215,7 @@ private:
     #pragma pack(pop) // Restore default compiler alignment
 
 public:
-    BAOS832(uint8_t rxPin = 6, uint8_t txPin = 5);
+    BAOS832();
     ~BAOS832();
 
     // Initializes connection by sending Reset.Req over FT1.2 link layer
