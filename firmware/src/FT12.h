@@ -20,7 +20,7 @@ private:
 
     HardwareSerial* serial_;
     bool initialized_ = false;
-    static constexpr uint8_t ACK_LED_PIN = 12; // Board requirement: pulse D12 on successful BAOS UART ACK
+    static constexpr uint8_t ACK_LED_PIN = 12; // Board requirement: pulse D12 when an ACK frame is received from BAOS
     static constexpr uint16_t ACK_LED_BLINK_MS = 30;
     bool ackLedOn_ = false;
     uint32_t ackLedStartMs_ = 0;
