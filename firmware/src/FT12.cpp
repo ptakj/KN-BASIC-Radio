@@ -28,7 +28,7 @@ void FT12::ensureInitialized() {
 
 void FT12::serviceAckLed() {
     if (!ackLedOn_) return;
-    if ((uint32_t)(millis() - ackLedStartMs_) >= ACK_LED_BLINK_MS) {
+    if (millis() - ackLedStartMs_ >= ACK_LED_BLINK_MS) {
         digitalWrite(ACK_LED_PIN, LOW);
         ackLedOn_ = false;
     }
@@ -43,6 +43,7 @@ void FT12::blinkAckLed() {
 bool FT12::sendReset() {
     ensureInitialized();
     serviceAckLed();
+    // FT1.2 fixed reset request frame: 0x10 (start), 0x40 (control), 0x40 (checksum), 0x16 (end).
     const uint8_t resetReq[] = {0x10, 0x40, 0x40, 0x16};
     serial_->write(resetReq, sizeof(resetReq));
     
@@ -154,6 +155,7 @@ void FT12::sendAck() {
 }
 
 bool FT12::resetTriggered(const uint8_t frame[4]) {
+    // FT1.2 reset indication from BAOS: 0x10 (start), 0xC0 (server reset control), 0xC0 (checksum), 0x16 (end).
     const uint8_t resetInd[] = {0x10, 0xC0, 0xC0, 0x16};
     if (memcmp(frame, resetInd, sizeof(resetInd)) == 0) {
         currentHostCr_ = ODD_HOST_CR;
