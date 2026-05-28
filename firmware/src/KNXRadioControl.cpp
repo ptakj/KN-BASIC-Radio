@@ -3,6 +3,7 @@
 
 KNXRadioControl::KNXRadioControl(uint8_t rxPin, uint8_t txPin) 
     : baos_(rxPin, txPin), 
+      _isConnected(false), _lastReconnectAttemptMs(0),
       _lastFreq(0), _lastVol(255), _lastRssi(-127), _lastPollMs(0),
       _rdsScrollOffset(0), _lastRdsScrollMs(0), 
       _lastHour(255), _lastMinute(255), _lastDay(0), _lastMonth(0), _lastYear(0)
@@ -15,18 +16,33 @@ KNXRadioControl::~KNXRadioControl() {}
 
 bool KNXRadioControl::begin() {
     Log.notice(F("KNXRadio: Initializing BAOS832..." CR));
-    return baos_.begin();
+    _isConnected = baos_.begin();
+    return _isConnected;
 }
 
 void KNXRadioControl::update(FMRadio* radio) {
     if (!radio) return;
+
+    uint32_t now = millis();
+
+    // --- 0. Automatyczne ponawianie połączenia ---
+    if (!_isConnected) {
+        if (now - _lastReconnectAttemptMs >= RECONNECT_INTERVAL_MS) {
+            _lastReconnectAttemptMs = now;
+            Log.notice(F("KNXRadio: Retrying connection to BAOS832..." CR));
+            _isConnected = baos_.begin();
+        }
+        
+        // Jeśli próba się nie powiodła (wciąż nie ma połączenia), przerwij aktualizację
+        if (!_isConnected) return;
+    }
 
     // --- 1. Odbiór danych KNX ---
     uint8_t payload[128];
     uint8_t size = 0;
     int16_t msgType = baos_.checkMessages(payload, &size);
     if (msgType == 0x00) {
-        baos_.begin();
+        _isConnected = baos_.begin();
         return;
     }
 
@@ -45,8 +61,6 @@ void KNXRadioControl::update(FMRadio* radio) {
             }
         }
     }
-
-    uint32_t now = millis();
 
     // --- 2. Odpytywanie radia i wysyłanie stanów (Feedback) ---
     if (now - _lastPollMs >= POLL_INTERVAL_MS) {

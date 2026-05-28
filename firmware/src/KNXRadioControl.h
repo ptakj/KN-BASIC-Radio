@@ -26,6 +26,8 @@ public:
 
 private:
     BAOS832 baos_;
+    bool _isConnected;
+    uint32_t _lastReconnectAttemptMs; // Timer do ponawiania połączenia
     
     uint16_t _lastFreq;
     uint8_t  _lastVol;
@@ -42,6 +44,7 @@ private:
     uint32_t _lastPollMs;
     static constexpr uint32_t POLL_INTERVAL_MS = 500; 
     static constexpr uint32_t SCROLL_INTERVAL_MS = 2000; 
+    static constexpr uint32_t RECONNECT_INTERVAL_MS = 5000; // Próba połączenia co 5 sekund
 
     void handleKnxCommand(FMRadio* radio, uint16_t dpId, const uint8_t* data, uint8_t len);
     void sendFloatDPT9(uint16_t dpId, float value);
