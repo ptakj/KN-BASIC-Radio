@@ -14,7 +14,6 @@ KNXRadioControl::KNXRadioControl(uint8_t rxPin, uint8_t txPin)
 KNXRadioControl::~KNXRadioControl() {}
 
 bool KNXRadioControl::begin() {
-    Log.notice(F("KNXRadio: Initializing BAOS832..." CR));
     return baos_.begin();
 }
 

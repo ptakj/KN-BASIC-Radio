@@ -1,7 +1,6 @@
 #pragma once
 #include <Arduino.h>
 #include <stdint.h>
-#include <ArduinoLog.h>
 #include "FMRadio.h"
 #include "LCDDisplay.h"
 #include "EncoderInput.h"

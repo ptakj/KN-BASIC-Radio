@@ -2,7 +2,6 @@
 #define KNX_RADIO_CONTROL_H
 
 #include <Arduino.h>
-#include <ArduinoLog.h>
 #include "BAOS832.h"
 #include "FMRadio.h"
 

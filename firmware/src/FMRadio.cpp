@@ -3,15 +3,12 @@
 
 void FMRadio::seek(bool up) {
     uint8_t direction = up ? 1 : 0;
-    Log.notice(F("FMRadio: Seeking %s..." CR), up ? "UP" : "DOWN");
     _radio.seek(1, direction); 
     delay(100); 
     _frequency = _radio.getRealFrequency(); 
-    Log.notice(F("FMRadio: Tuned to %d.%02d MHz" CR), _frequency / 100, _frequency % 100);
 }
 
 void FMRadio::autoScan() {
-    Log.notice(F("FMRadio: Starting auto-scan..." CR));
     _totalFound = 0;
     setFrequency(FREQ_MIN);
     _lastScanAction = millis(); 
@@ -36,14 +33,12 @@ void FMRadio::update() {
             if (now - _lastScanAction >= 600) {
                 uint16_t foundFreq = _radio.getRealFrequency();
                 if (foundFreq <= FREQ_MIN || (_totalFound > 0 && foundFreq <= _foundStations[_totalFound - 1])) {
-                    Log.notice(F("FMRadio: Auto-scan complete. Found: %d" CR), _totalFound);
                     _scanState = IDLE; 
                     break;
                 }
                 if (_radio.getRssi() > 22) {
                     if (_totalFound < MAX_STORED) {
                         _foundStations[_totalFound++] = foundFreq;
-                        Log.verbose(F("FMRadio: Found %d.%02d MHz" CR), foundFreq/100, foundFreq%100);
                     } else {
                         _scanState = IDLE;
                         break;

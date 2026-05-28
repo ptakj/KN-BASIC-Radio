@@ -2,7 +2,8 @@
 #define FT12_H
 
 #include <Arduino.h>
-#include <CustomSoftwareSerial.h>
+
+#define serial_ Serial
 
 class FT12 {
 private:
@@ -20,8 +21,6 @@ private:
 
     uint8_t currentHostCr_ = ODD_HOST_CR;
     uint8_t currentServerCr_ = ODD_SERVER_CR;
-
-    CustomSoftwareSerial *serial_;
 
     const uint8_t MAX_BUFFER = 128;
 
