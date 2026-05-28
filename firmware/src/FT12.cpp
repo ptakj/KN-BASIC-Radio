@@ -1,4 +1,5 @@
 #include "FT12.h"
+#include <string.h>
 
 uint8_t FT12::calculateChecksum(const uint8_t data[], const uint8_t size, bool toSend) {
     uint8_t checksum = toSend ? currentHostCr_ : currentServerCr_;
@@ -25,14 +26,23 @@ void FT12::ensureInitialized() {
     initialized_ = true;
 }
 
+void FT12::serviceAckLed() {
+    if (!ackLedOn_) return;
+    if ((uint32_t)(millis() - ackLedStartMs_) >= ACK_LED_BLINK_MS) {
+        digitalWrite(ACK_LED_PIN, LOW);
+        ackLedOn_ = false;
+    }
+}
+
 void FT12::blinkAckLed() {
     digitalWrite(ACK_LED_PIN, HIGH);
-    delay(30);
-    digitalWrite(ACK_LED_PIN, LOW);
+    ackLedOn_ = true;
+    ackLedStartMs_ = millis();
 }
 
 bool FT12::sendReset() {
     ensureInitialized();
+    serviceAckLed();
     const uint8_t resetReq[] = {0x10, 0x40, 0x40, 0x16};
     serial_->write(resetReq, sizeof(resetReq));
     
@@ -47,6 +57,7 @@ bool FT12::sendReset() {
 
 bool FT12::sendDataFrame(const uint8_t data[], const uint8_t size) {
     ensureInitialized();
+    serviceAckLed();
     if (7 + size > MAX_BUFFER)
         return false;
 
@@ -76,6 +87,7 @@ bool FT12::sendDataFrame(const uint8_t data[], const uint8_t size) {
 
 int8_t FT12::readDataFrame(uint8_t *data, uint8_t *size) {
     ensureInitialized();
+    serviceAckLed();
     if (!serial_->available()) 
         return -1;
 
@@ -124,26 +136,26 @@ bool FT12::waitForAck() {
     unsigned long startMillis = millis();
 
     while (millis() - startMillis <= STD_DELAY) {
+        serviceAckLed();
         if (!serial_->available()) continue;
         if (serial_->read() == ACK_FRAME) {
             blinkAckLed();
             return true;
         }
     }
+    serviceAckLed();
     return false;
 }
 
 void FT12::sendAck() {
     ensureInitialized();
+    serviceAckLed();
     serial_->write(ACK_FRAME);
 }
 
 bool FT12::resetTriggered(const uint8_t frame[4]) {
     const uint8_t resetInd[] = {0x10, 0xC0, 0xC0, 0x16};
-    if (frame[0] == resetInd[0] &&
-        frame[1] == resetInd[1] &&
-        frame[2] == resetInd[2] &&
-        frame[3] == resetInd[3]) {
+    if (memcmp(frame, resetInd, sizeof(resetInd)) == 0) {
         currentHostCr_ = ODD_HOST_CR;
         currentServerCr_ = ODD_SERVER_CR;
         return true;

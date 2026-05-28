@@ -21,10 +21,14 @@ private:
     HardwareSerial* serial_;
     bool initialized_ = false;
     static constexpr uint8_t ACK_LED_PIN = 12;
+    static constexpr uint16_t ACK_LED_BLINK_MS = 30;
+    bool ackLedOn_ = false;
+    uint32_t ackLedStartMs_ = 0;
 
     const uint8_t MAX_BUFFER = 128;
 
     void ensureInitialized();
+    void serviceAckLed();
     void blinkAckLed();
     uint8_t calculateChecksum(const uint8_t data[], const uint8_t size, bool toSend);
     bool waitForAck();
