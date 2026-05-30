@@ -5,7 +5,7 @@
 
 class FT12 {
 private:
-    const uint8_t STD_DELAY      = 50;
+    const uint8_t STD_DELAY      = 100;
     const uint32_t BAUDRATE      = 19200;
     const uint8_t ACK_FRAME      = 0xE5;
     const uint8_t DATA_SEP       = 0x68;

@@ -22,7 +22,7 @@ void FT12::ensureInitialized() {
     serial_->begin(BAUDRATE, SERIAL_8E1);
     serial_->setTimeout(STD_DELAY);
     pinMode(ACK_LED_PIN, OUTPUT);
-    digitalWrite(ACK_LED_PIN, LOW);
+    digitalWrite(ACK_LED_PIN, HIGH);
     initialized_ = true;
 }
 
@@ -30,13 +30,13 @@ void FT12::serviceAckLed() {
     if (!ackLedOn_) return;
     const uint32_t now = millis();
     if (now - ackLedStartMs_ >= ACK_LED_BLINK_MS) {
-        digitalWrite(ACK_LED_PIN, LOW);
+        digitalWrite(ACK_LED_PIN, HIGH);
         ackLedOn_ = false;
     }
 }
 
 void FT12::blinkAckLed() {
-    digitalWrite(ACK_LED_PIN, HIGH);
+    digitalWrite(ACK_LED_PIN, LOW);
     ackLedOn_ = true;
     ackLedStartMs_ = millis();
 }
