@@ -33,7 +33,7 @@ private:
     uint8_t  _lastVol;
     int8_t   _lastRssi;
     char     _lastStation[15];
-    char     _lastRdsText[65];
+    uint8_t _lastRdsChangeCounter;
     
     uint8_t  _rdsScrollOffset;
     uint32_t _lastRdsScrollMs;

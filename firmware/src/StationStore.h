@@ -38,8 +38,10 @@ public:
 
 private:
     static void dumpJSON(const uint16_t* stations, uint8_t count);
-    static bool parseJSON(const char* buf, uint16_t* dest, uint8_t maxLen, uint8_t& outCount);
-
-    static char   _serialBuf[64];
-    static uint8_t _serialPos;
+    
+    // Zmienne do maszyny stanów parsującej
+    static uint8_t  _parsedCount;
+    static uint16_t _currentVal;
+    static bool     _inArray;
+    static bool     _inNumber;
 };

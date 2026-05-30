@@ -6,10 +6,9 @@ KNXRadioControl::KNXRadioControl()
       _isConnected(false), _lastReconnectAttemptMs(0),
       _lastFreq(0), _lastVol(255), _lastRssi(-127), _lastPollMs(0),
       _rdsScrollOffset(0), _lastRdsScrollMs(0), 
-      _lastHour(255), _lastMinute(255), _lastDay(0), _lastMonth(0), _lastYear(0)
+      _lastHour(255), _lastMinute(255), _lastDay(0), _lastMonth(0), _lastYear(0), _lastRdsChangeCounter(255)
 {
     memset(_lastStation, 0, sizeof(_lastStation));
-    memset(_lastRdsText, 0, sizeof(_lastRdsText));
 }
 
 KNXRadioControl::~KNXRadioControl() {}
@@ -38,7 +37,7 @@ void KNXRadioControl::update(FMRadio* radio) {
     }
 
     // --- 1. Odbiór danych KNX ---
-    uint8_t payload[128];
+    uint8_t payload[40];
     uint8_t size = 0;
     int16_t msgType = baos_.checkMessages(payload, &size);
     if (msgType == 0x00) {
@@ -96,16 +95,6 @@ void KNXRadioControl::update(FMRadio* radio) {
             }
         }
 
-        char currentText[65] = {0};
-        if (radio->getRDSProgramInfo(currentText, sizeof(currentText))) {
-            if (strcmp(currentText, _lastRdsText) != 0) {
-                strncpy(_lastRdsText, currentText, sizeof(_lastRdsText));
-                _rdsScrollOffset = 0;
-                _lastRdsScrollMs = now;
-                sendStringDPT16(DP_STAT_RDS_TEXT, _lastRdsText, 0);
-            }
-        }
-
         uint8_t rdsD, rdsMo, rdsY, rdsH, rdsMi;
         if (radio->getRDSDateTime(rdsD, rdsMo, rdsY, rdsH, rdsMi)) {
             if (rdsH != _lastHour || rdsMi != _lastMinute) {
@@ -119,14 +108,24 @@ void KNXRadioControl::update(FMRadio* radio) {
         }
     }
 
-    // --- 3. Marquee text (Przewijanie RDS) ---
-    uint8_t textLen = strlen(_lastRdsText);
-    if (textLen > 14) {
-        if (now - _lastRdsScrollMs >= SCROLL_INTERVAL_MS) {
+    const FMRadio::RDSData& rds = radio->getRDS();
+    if (rds.textValid) {
+        if (rds.textChangeCounter != _lastRdsChangeCounter) {
+            _lastRdsChangeCounter = rds.textChangeCounter;
+            _rdsScrollOffset = 0;
             _lastRdsScrollMs = now;
-            _rdsScrollOffset++;
-            if (_rdsScrollOffset >= textLen) _rdsScrollOffset = 0; 
-            sendStringDPT16(DP_STAT_RDS_TEXT, _lastRdsText, _rdsScrollOffset);
+            sendStringDPT16(DP_STAT_RDS_TEXT, rds.radioText, 0);
+        }
+
+        // --- 3. Marquee text (Przewijanie RDS) ---
+        uint8_t textLen = strlen(rds.radioText);
+        if (textLen > 14) {
+            if (now - _lastRdsScrollMs >= SCROLL_INTERVAL_MS) {
+                _lastRdsScrollMs = now;
+                _rdsScrollOffset++;
+                if (_rdsScrollOffset >= textLen) _rdsScrollOffset = 0; 
+                sendStringDPT16(DP_STAT_RDS_TEXT, rds.radioText, _rdsScrollOffset);
+            }
         }
     }
 }

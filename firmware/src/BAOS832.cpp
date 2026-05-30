@@ -20,7 +20,7 @@ bool BAOS832::begin() {
 }
 
 int16_t BAOS832::checkMessages(uint8_t *payloadBuffer, uint8_t *payloadSize) {
-    uint8_t rawFrame[128];
+    uint8_t rawFrame[40];
     uint8_t rawSize = 0;
     
     int8_t status = ft12_.readDataFrame(rawFrame, &rawSize);

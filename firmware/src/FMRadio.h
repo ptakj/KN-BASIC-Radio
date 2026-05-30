@@ -37,6 +37,31 @@ public:
         return (index < _totalFound) ? _foundStations[index] : FREQ_MIN;
     }
 
+    struct RDSData {
+        char stationName[16] = "";
+        char radioText[65]   = "";
+        char stationInfo[33] = "";
+        char time[24]        = "";
+
+        uint8_t pty = 0;
+        bool tp = false;
+
+        bool stationValid = false;
+        bool textValid = false;
+        bool timeValid = false;
+        
+        uint8_t textChangeCounter = 0; // Dodano: licznik zmiany tekstu (pomaga innym klasom)
+    };
+    
+    void updateRDS();
+
+    const RDSData& getRDS() const {
+        return _rds;
+    }
+
+    bool getStationName(char* buffer, uint8_t size);
+    bool getRadioText(char* buffer, uint8_t size);
+
 private:
     RDA5807  _radio;
     uint16_t _frequency = 0;
@@ -49,4 +74,15 @@ private:
     uint8_t   _totalFound   = 0;
     ScanState _scanState    = IDLE;
     uint32_t  _lastScanAction = 0;
+
+    RDSData _rds;
+
+    char _lastRawPS[16] = "";
+    uint32_t _lastRDSUpdate = 0;
+    char _stableStationName[16];
+    uint8_t _sameNameCounter = 0;
+
+    bool isDynamicPS(const char* txt);
+    void sanitizePS(const char* src, char* dst, uint8_t size);
+    void resetRDS();
 };

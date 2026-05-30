@@ -6,7 +6,8 @@ void FMRadio::seek(bool up) {
     Log.notice(F("FMRadio: Seeking %s..." CR), up ? "UP" : "DOWN");
     _radio.seek(1, direction); 
     delay(100); 
-    _frequency = _radio.getRealFrequency(); 
+    _frequency = _radio.getRealFrequency();
+    resetRDS(); 
     Log.notice(F("FMRadio: Tuned to %d.%02d MHz" CR), _frequency / 100, _frequency % 100);
 }
 
@@ -60,7 +61,12 @@ void FMRadio::update() {
 
 void FMRadio::begin(uint16_t startFreq, uint8_t startVolume) {
     _radio.setup();
+
     _radio.setRDS(true);
+    _radio.setRdsFifo(true);
+
+    _radio.clearRdsBuffer();
+
     _volume = (startVolume > VOLUME_MAX) ? VOLUME_MAX : startVolume;
     _radio.setVolume(_volume);
     _radio.setMute(false);
@@ -70,8 +76,15 @@ void FMRadio::begin(uint16_t startFreq, uint8_t startVolume) {
 void FMRadio::setFrequency(uint16_t freq) {
     if (freq < FREQ_MIN) freq = FREQ_MIN;
     if (freq > FREQ_MAX) freq = FREQ_MAX;
+
+    if (_frequency == freq)
+        return;
+
     _frequency = freq;
+
     _radio.setFrequency(_frequency);
+
+    resetRDS();
 }
 
 uint16_t FMRadio::getFrequency() const { return _frequency; }
@@ -125,4 +138,181 @@ bool FMRadio::getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_
     minute = (t[14] - '0') * 10 + (t[15] - '0');
     
     return (month > 0 && month <= 12 && day > 0 && day <= 31 && hour < 24 && minute < 60);
+}
+
+void FMRadio::sanitizePS(
+    const char* src,
+    char* dst,
+    uint8_t size) {
+    if (!src || !dst || size < 2)
+        return;
+
+    uint8_t j = 0;
+
+    for (uint8_t i = 0; src[i] && j < size - 1; i++)
+    {
+        char c = src[i];
+
+        if ((uint8_t)c < 32)
+            continue;
+
+        dst[j++] = c;
+    }
+
+    dst[j] = 0;
+
+    while (j > 0 && dst[j - 1] == ' ')
+    {
+        dst[j - 1] = 0;
+        j--;
+    }
+}
+
+bool FMRadio::isDynamicPS(const char* txt) {
+    if (!txt)
+        return false;
+
+    uint8_t digits = 0;
+
+    for (uint8_t i = 0; txt[i]; i++)
+    {
+        if (isdigit(txt[i]))
+            digits++;
+    }
+
+    if (digits >= 2)
+        return true;
+
+    if (strchr(txt, ':'))
+        return true;
+
+    return false;
+}
+
+void FMRadio::updateRDS()
+{
+    if (!_radio.getRdsReady())
+        return;
+
+    char* ps  = _radio.getRdsStationName();
+    char* rt  = _radio.getRdsProgramInformation();
+    char* si  = _radio.getRdsStationInformation();
+    char* tim = _radio.getRdsTime();
+
+    if (ps && ps[0])
+    {
+        char cleaned[16];
+
+        sanitizePS(
+            ps,
+            cleaned,
+            sizeof(cleaned));
+
+        if (!isDynamicPS(cleaned))
+        {
+            if (strcmp(
+                    cleaned,
+                    _rds.stationName) != 0)
+            {
+                strncpy(
+                    _rds.stationName,
+                    cleaned,
+                    sizeof(_rds.stationName)-1);
+
+                _rds.stationValid = true;
+            }
+        }
+    }
+
+    if (rt && rt[0])
+    {
+        // Czyścimy i parsujemy tekst już tutaj, by inne moduły nie musiały tworzyć kopii
+        char rtClean[65] = {};
+        uint8_t w = 0;
+        for (uint8_t i = 0; i < 64 && rt[i] != '\0'; ++i) {
+            char c = rt[i];
+            if (c == 0x0D) break;          // marker końca RT wg. standardu RDS
+            if (c >= 0x20 && c < 0x7F) {   // tylko drukowalne ASCII
+                rtClean[w++] = c;
+            }
+        }
+        while (w > 0 && rtClean[w - 1] == ' ') --w;
+        rtClean[w] = '\0';
+
+        // Aktualizacja tylko przy nowym tekście
+        if (w > 0 && strcmp(_rds.radioText, rtClean) != 0) {
+            strncpy(_rds.radioText, rtClean, sizeof(_rds.radioText) - 1);
+            _rds.textValid = true;
+            _rds.textChangeCounter++; // Informujemy nasłuchujące moduły o zmianie
+        }
+    }
+
+    if (si && si[0])
+    {
+        strncpy(
+            _rds.stationInfo,
+            si,
+            sizeof(_rds.stationInfo)-1);
+    }
+
+    if (tim && tim[0])
+    {
+        strncpy(
+            _rds.time,
+            tim,
+            sizeof(_rds.time)-1);
+
+        _rds.timeValid = true;
+    }
+
+    _rds.pty =
+        _radio.getRdsProgramType();
+
+    _rds.tp =
+        _radio.getRdsTrafficProgramCode();
+
+    _lastRDSUpdate =
+        millis();
+}
+
+bool FMRadio::getStationName(
+    char* buffer,
+    uint8_t size) {
+    if (!_rds.stationValid)
+        return false;
+
+    strncpy(
+        buffer,
+        _rds.stationName,
+        size - 1);
+
+    buffer[size - 1] = 0;
+
+    return true;
+}
+
+bool FMRadio::getRadioText(
+    char* buffer,
+    uint8_t size) {
+    if (!_rds.textValid)
+        return false;
+
+    strncpy(
+        buffer,
+        _rds.radioText,
+        size - 1);
+
+    buffer[size - 1] = 0;
+
+    return true;
+}
+
+void FMRadio::resetRDS() {
+    memset(&_rds, 0, sizeof(_rds));
+
+    memset(_lastRawPS, 0, sizeof(_lastRawPS));
+
+    _sameNameCounter = 0;
+
+    _radio.clearRdsBuffer();
 }

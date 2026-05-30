@@ -25,7 +25,7 @@ private:
     bool ackLedOn_ = false;
     uint32_t ackLedStartMs_ = 0;
 
-    const uint8_t MAX_BUFFER = 128;
+    const uint8_t MAX_BUFFER = 40;
 
     void ensureInitialized();
     void serviceAckLed();
