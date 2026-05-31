@@ -18,7 +18,7 @@ public:
     static constexpr uint16_t DP_STAT_TIME        = 8;  // DPT 10.001
     static constexpr uint16_t DP_STAT_DATE        = 9;  // DPT 11.001
 
-    KNXRadioControl(uint8_t rxPin = 6, uint8_t txPin = 5);
+    KNXRadioControl();
     ~KNXRadioControl();
 
     bool begin();
@@ -26,12 +26,14 @@ public:
 
 private:
     BAOS832 baos_;
+    bool _isConnected;
+    uint32_t _lastReconnectAttemptMs; // Timer do ponawiania połączenia
     
     uint16_t _lastFreq;
     uint8_t  _lastVol;
     int8_t   _lastRssi;
     char     _lastStation[15];
-    char     _lastRdsText[65];
+    uint8_t _lastRdsChangeCounter;
     
     uint8_t  _rdsScrollOffset;
     uint32_t _lastRdsScrollMs;
@@ -42,6 +44,7 @@ private:
     uint32_t _lastPollMs;
     static constexpr uint32_t POLL_INTERVAL_MS = 500; 
     static constexpr uint32_t SCROLL_INTERVAL_MS = 2000; 
+    static constexpr uint32_t RECONNECT_INTERVAL_MS = 5000; // Próba połączenia co 5 sekund
 
     void handleKnxCommand(FMRadio* radio, uint16_t dpId, const uint8_t* data, uint8_t len);
     void sendFloatDPT9(uint16_t dpId, float value);

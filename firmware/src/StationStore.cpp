@@ -2,9 +2,10 @@
 #include <Arduino.h>
 
 // Static member definitions
-char    StationStore::_serialBuf[64] = {};
-uint8_t StationStore::_serialPos     = 0;
-
+uint8_t  StationStore::_parsedCount = 0;
+uint16_t StationStore::_currentVal  = 0;
+bool     StationStore::_inArray     = false;
+bool     StationStore::_inNumber    = false;
 // ---------------------------------------------------------------------------
 // EEPROM helpers
 // ---------------------------------------------------------------------------
@@ -50,32 +51,39 @@ void StationStore::invalidate() {
 void StationStore::handleSerial(const uint16_t* stations, uint8_t count) {
     while (Serial.available()) {
         char c = (char)Serial.read();
-
-        if (c == '\n' || c == '\r') {
-            if (_serialPos == 0) continue;          // blank line
-            _serialBuf[_serialPos] = '\0';
-            _serialPos = 0;
-
-            // Command: DUMP → send current stations as JSON
-            if (strncmp(_serialBuf, "DUMP", 4) == 0) {
-                dumpJSON(stations, count);
-            }
-            // Command: JSON array → load & save stations
-            else if (_serialBuf[0] == '[') {
-                uint16_t parsed[MAX_STATIONS];
-                uint8_t  parsedCount = 0;
-                if (parseJSON(_serialBuf, parsed, MAX_STATIONS, parsedCount)) {
-                    save(parsed, parsedCount);
-                    Serial.print(F("{\"ok\":true,\"saved\":"));
-                    Serial.print(parsedCount);
-                    Serial.println(F("}"));
-                } else {
-                    Serial.println(F("{\"ok\":false,\"error\":\"parse_failed\"}"));
+        
+        if (c == 'D') {
+            if (!_inArray) dumpJSON(stations, count);
+        } 
+        else if (c == '[') {
+            _inArray = true;
+            _parsedCount = 0;
+            _currentVal = 0;
+            _inNumber = false;
+            EEPROM.update(EEPROM_BASE, MAGIC); // Zapisujemy magic od razu
+        } 
+        else if (_inArray) {
+            if (c >= '0' && c <= '9') {
+                _currentVal = _currentVal * 10 + (c - '0');
+                _inNumber = true;
+            } 
+            else if (c == ',' || c == ']') {
+                if (_inNumber && _parsedCount < MAX_STATIONS) {
+                    // Zapis liczby BEZPOŚREDNIO do EEPROM "w locie"
+                    EEPROM.update(EEPROM_BASE + 2 + _parsedCount * 2,     (uint8_t)(_currentVal >> 8));
+                    EEPROM.update(EEPROM_BASE + 2 + _parsedCount * 2 + 1, (uint8_t)(_currentVal & 0xFF));
+                    _parsedCount++;
                 }
-            }
-        } else {
-            if (_serialPos < sizeof(_serialBuf) - 1) {
-                _serialBuf[_serialPos++] = c;
+                _currentVal = 0;
+                _inNumber = false;
+                
+                if (c == ']') {
+                    _inArray = false;
+                    EEPROM.update(EEPROM_BASE + 1, _parsedCount); // Na koniec aktualizujemy licznik
+                    Serial.print(F("{\"ok\":true,\"saved\":"));
+                    Serial.print(_parsedCount);
+                    Serial.println(F("}"));
+                }
             }
         }
     }
@@ -104,33 +112,4 @@ void StationStore::dumpJSON(const uint16_t* stations, uint8_t count) {
     Serial.print(F("],\"count\":"));
     Serial.print(count);
     Serial.println('}');
-}
-
-bool StationStore::parseJSON(const char* buf, uint16_t* dest, uint8_t maxLen, uint8_t& outCount) {
-    // Accepts a plain frequency array: [9600,9980,10000]
-    outCount = 0;
-    const char* p = buf;
-
-    while (*p && *p != '[') ++p;
-    if (*p != '[') return false;
-    ++p;
-
-    while (*p) {
-        while (*p == ' ' || *p == '\t') ++p;
-        if (*p == ']') break;
-
-        if (*p >= '0' && *p <= '9') {
-            uint16_t val = 0;
-            while (*p >= '0' && *p <= '9') {
-                val = val * 10 + (*p - '0');
-                ++p;
-            }
-            if (outCount < maxLen) {
-                dest[outCount++] = val;
-            }
-        } else {
-            ++p;  // skip commas, spaces, etc.
-        }
-    }
-    return outCount > 0;
 }

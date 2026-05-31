@@ -1,6 +1,6 @@
 #include "BAOS832.h"
 
-BAOS832::BAOS832(uint8_t rxPin, uint8_t txPin) : ft12_(rxPin, txPin) {
+BAOS832::BAOS832() : ft12_(Serial) {
     // Basic driver instantiation. Log setup is expected to be done in main setup()
 }
 
@@ -20,7 +20,7 @@ bool BAOS832::begin() {
 }
 
 int16_t BAOS832::checkMessages(uint8_t *payloadBuffer, uint8_t *payloadSize) {
-    uint8_t rawFrame[128];
+    uint8_t rawFrame[40];
     uint8_t rawSize = 0;
     
     int8_t status = ft12_.readDataFrame(rawFrame, &rawSize);
@@ -40,6 +40,10 @@ int16_t BAOS832::checkMessages(uint8_t *payloadBuffer, uint8_t *payloadSize) {
                 payloadBuffer[i] = rawFrame[i + 2];
             }
             
+            if (subService == SUB_SET_DP_VALUE_RES || subService == SUB_GET_DP_VALUE_RES) {
+                return -1;
+            }
+
             return subService; 
         } else {
             Log.warning(F("BAOS: Received unexpected data message frame. MainService: 0x%X" CR), rawFrame[0]);

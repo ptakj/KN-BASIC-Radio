@@ -1,22 +1,34 @@
 #include "StationList.h"
 
-// Polish FM stations receivable in the Wrocław area.
-// Frequencies are in MHz × 100 (e.g. 9600 = 96.0 MHz).
-const Station StationList::stations[] = {
-    { "RMF FM",         9600 },   // 96.0 MHz
-    { "Radio ZET",      9980 },   // 99.8 MHz
-    { "PR1 Jedynka",   10000 },   // 100.0 MHz
-    { "Eska Wroclaw",  10080 },   // 100.8 MHz
-    { "Radio Wroclaw", 10310 },   // 103.1 MHz
-    { "TOK FM",        10470 },   // 104.7 MHz
-    { "PR3 Trojka",    10750 },   // 107.5 MHz
+// Deklaracje stringów w PROGMEM
+const char name0[] PROGMEM = "RMF FM";
+const char name1[] PROGMEM = "Radio ZET";
+const char name2[] PROGMEM = "PR1 Jedynka";
+const char name3[] PROGMEM = "Eska Wroclaw";
+const char name4[] PROGMEM = "Radio Wroclaw";
+const char name5[] PROGMEM = "TOK FM";
+const char name6[] PROGMEM = "PR3 Trojka";
+
+// Deklaracja tablicy we Flash
+const Station stations[] PROGMEM = {
+    { name0, 9600 },
+    { name1, 9980 },
+    { name2, 10000 },
+    { name3, 10080 },
+    { name4, 10310 },
+    { name5, 10470 },
+    { name6, 10750 },
 };
 
-const uint8_t StationList::count =
-    sizeof(StationList::stations) / sizeof(StationList::stations[0]);
+const uint8_t StationList::count = sizeof(stations) / sizeof(stations[0]);
 
-const Station& StationList::at(uint8_t index) {
-    return stations[index % count];
+Station StationList::at(uint8_t index) {
+    index = index % count;
+    Station s;
+    // Odczytywanie wartości bezpośrednio z pamięci programu (Flash)
+    s.name = (const char*)pgm_read_ptr(&stations[index].name);
+    s.frequency = pgm_read_word(&stations[index].frequency);
+    return s;
 }
 
 uint8_t StationList::size() {
