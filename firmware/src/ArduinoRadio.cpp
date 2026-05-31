@@ -23,6 +23,7 @@ void ArduinoRadio::begin() {
 
 void ArduinoRadio::update() {
     _radio.update();
+    _radio.updateRDS(); // Pobierz nowe dane RDS, jeśli dostępne
     uint32_t now = millis();
     _encoder.update();
 
