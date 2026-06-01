@@ -1,4 +1,5 @@
 #include "LCDDisplay.h"
+#include <Arduino.h>
 #include <Wire.h>
 LCDDisplay::LCDDisplay() : _lcd(0x27, 16, 2) {}
 
