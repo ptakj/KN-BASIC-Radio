@@ -8,7 +8,7 @@ public:
     LCDDisplay();
 
     void begin();
-
+    void setStandby(bool on);
     /// Write a text string to a display row; pads to exactly 16 characters.
     void setLine(uint8_t row, const char* text);
 

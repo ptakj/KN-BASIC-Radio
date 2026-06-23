@@ -66,3 +66,14 @@ void LCDDisplay::writeLine(uint8_t row, const char* text) {
         ++i;
     }
 }
+
+
+void LCDDisplay::setStandby(bool on) {
+    if (on) {
+        _lcd.clear();       // Czyszczenie ekranu, żeby nie zostawały napisy
+        _lcd.noBacklight(); // Wyłączenie podświetlenia (ekran gaśnie)
+    } else {
+        _lcd.backlight();   // Włączenie podświetlenia z powrotem
+        _lcd.clear();
+    }
+}
