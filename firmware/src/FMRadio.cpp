@@ -7,6 +7,7 @@ void FMRadio::seek(bool up) {
     _radio.seek(1, direction); 
     delay(100); 
     _frequency = _radio.getRealFrequency(); 
+    _radio.clearRdsBuffer();
     Log.notice(F("FMRadio: Tuned to %d.%02d MHz" CR), _frequency / 100, _frequency % 100);
 }
 
@@ -14,10 +15,12 @@ void FMRadio::autoScan() {
     Log.notice(F("FMRadio: Starting auto-scan..." CR));
     _totalFound = 0;
     setFrequency(FREQ_MIN);
+    _startScanFreq = FREQ_MIN;
     _lastScanAction = millis(); 
-    _scanState = START_SCAN;    
+    //_scanState = START_SCAN;
+    _scanState = EVALUATING;    
 }
-
+/*
 void FMRadio::update() {
     if (_scanState == IDLE) return; 
     uint32_t now = millis();
@@ -34,7 +37,7 @@ void FMRadio::update() {
 
         case EVALUATING:
             if (now - _lastScanAction >= 600) {
-                uint16_t foundFreq = _radio.getRealFrequency();
+                uint16_t foundFre    _scanState = EVALUATING;  q = _radio.getRealFrequency();
                 if (foundFreq <= FREQ_MIN || (_totalFound > 0 && foundFreq <= _foundStations[_totalFound - 1])) {
                     Log.notice(F("FMRadio: Auto-scan complete. Found: %d" CR), _totalFound);
                     _scanState = IDLE; 
@@ -43,8 +46,10 @@ void FMRadio::update() {
                 if (_radio.getRssi() > 22) {
                     if (_totalFound < MAX_STORED) {
                         _foundStations[_totalFound++] = foundFreq;
+                        _radio.clearRdsBuffer();
                         Log.verbose(F("FMRadio: Found %d.%02d MHz" CR), foundFreq/100, foundFreq%100);
                     } else {
+                      _radio.clearRdsBuffer();
                         _scanState = IDLE;
                         break;
                     }
@@ -53,6 +58,64 @@ void FMRadio::update() {
                 _scanState = SEEKING; 
             }
             break;
+        default:
+            break;
+    }
+}*/
+void FMRadio::update() {
+    if (_scanState == IDLE) return; 
+    uint32_t now = millis();
+
+    switch (_scanState) {
+        case SEEKING:
+            if (now - _lastScanAction >= 100) {
+                _radio.seek(1, 1); 
+                _lastScanAction = now;
+                
+                uint16_t currentFreq = _radio.getRealFrequency();
+                if (currentFreq <= _startScanFreq && _totalFound > 0) {
+                    Log.notice(F("FMRadio: Auto-scan complete. Found: %d" CR), _totalFound);
+                    _scanState = IDLE;
+                } else {
+                    _scanState = EVALUATING; 
+                
+                
+                }
+            }
+            break;
+
+        case EVALUATING:
+            if (now - _lastScanAction >= 600) {
+                uint16_t foundFreq = _radio.getRealFrequency();
+                
+                if (_radio.getRssi() > 25) { 
+                    if (_totalFound < MAX_STORED) {
+                                                bool juzJest = false;
+                        for (uint8_t i = 0; i < _totalFound; i++) {
+                            if (_foundStations[i] == foundFreq) {
+                                juzJest = true;
+                                break;
+                            }
+                        }
+                        
+                        // Jeśli nowa stacja - zapisujemy
+                        if (!juzJest) {
+                            _foundStations[_totalFound++] = foundFreq;
+                            _radio.clearRdsBuffer(); // Czyścimy stary RDS
+                            Log.verbose(F("FMRadio: Found %d.%02d MHz" CR), foundFreq/100, foundFreq%100);
+                        }
+                    } else {
+                        _radio.clearRdsBuffer();
+                        Log.notice(F("FMRadio: Memory full. Auto-scan stopped." CR));
+                        _scanState = IDLE;
+                        break;
+                    }
+                }
+                _lastScanAction = now;
+                _scanState = SEEKING;
+            }
+            break;
+            
         default:
             break;
     }
@@ -92,7 +155,7 @@ void FMRadio::volumeStep(int8_t direction) {
 
 uint8_t FMRadio::getVolume() const { return _volume; }
 int8_t FMRadio::getRSSI() { return static_cast<int8_t>(_radio.getRssi()); }
-
+/*
 bool FMRadio::getRDSStationName(char* buffer, uint8_t bufSize) {
     if (!buffer || bufSize == 0) return false;
     buffer[0] = '\0';
@@ -109,6 +172,31 @@ bool FMRadio::getRDSStationName(char* buffer, uint8_t bufSize) {
     strncpy(buffer, ps, bufSize - 1);
     buffer[bufSize - 1] = '\0';
     return true;
+}*/
+bool FMRadio::getRDSStationName(char* buffer, uint8_t bufSize) {
+    if (!buffer || bufSize == 0) return false;
+    buffer[0] = '\0';
+    if (!_radio.getRdsReady()) return false;
+    
+    char* ps = _radio.getRdsStationName();
+    if (!ps || ps[0] == '\0') return false;
+    while (*ps == ' ' && *ps != '\0') {
+        ps++;
+    }
+        if (ps[0] == '\0') return false;
+
+        uint8_t i = 0;
+    while (ps[i] != '\0' && i < (bufSize - 1)) {
+        if (ps[i] >= 32 && ps[i] <= 126) {
+            buffer[i] = ps[i];
+        } else {
+            buffer[i] = ' '; 
+        }
+        i++;
+    }
+    buffer[i] = '\0';
+    
+    return (strlen(buffer) > 0);
 }
 
 bool FMRadio::getRDSProgramInfo(char* buffer, uint8_t bufSize) {
@@ -132,7 +220,7 @@ bool FMRadio::getRDSProgramInfo(char* buffer, uint8_t bufSize) {
     
     return (strlen(buffer) > 0);
 }
-
+/*
 bool FMRadio::getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_t& hour, uint8_t& minute) {
     if (!_radio.getRdsReady()) return false;
     char* t = _radio.getRdsTime();
@@ -153,4 +241,24 @@ bool FMRadio::getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_
     minute = (t[14] - '0') * 10 + (t[15] - '0');
     
     return (month > 0 && month <= 12 && day > 0 && day <= 31 && hour < 24 && minute < 60);
+}*/
+
+bool FMRadio::getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_t& hour, uint8_t& minute) {
+    if (!_radio.getRdsReady()) return false;
+    char* t = _radio.getRdsTime();
+    if (!t || strlen(t) < 16) return false; 
+
+    int y = 0, m = 0, d = 0, hr = 0, min = 0;
+    
+    if (sscanf(t, "%d-%d-%d %d:%d", &y, &m, &d, &hr, &min) == 5) {
+        if (m > 0 && m <= 12 && d > 0 && d <= 31 && hr < 24 && min < 60) {
+            year   = static_cast<uint8_t>(y % 100); // Konwersja roku (np. 2026 -> 26)
+            month  = static_cast<uint8_t>(m);
+            day    = static_cast<uint8_t>(d);
+            hour   = static_cast<uint8_t>(hr);
+            minute = static_cast<uint8_t>(min);
+            return true;
+        }
+    }
+    return false;
 }
