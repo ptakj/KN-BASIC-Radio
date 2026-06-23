@@ -154,3 +154,18 @@ bool FMRadio::getRDSDateTime(uint8_t& day, uint8_t& month, uint8_t& year, uint8_
     
     return (month > 0 && month <= 12 && day > 0 && day <= 31 && hour < 24 && minute < 60);
 }
+
+void FMRadio::setStandby(bool on) {
+    if (on) {
+        Log.notice(F("FMRadio: Entering standby mode..." CR));
+        _radio.setMute(true);      // Wycisz układ natychmiast
+        // Jeśli biblioteka PU2CLR to obsługuje, wyłączamy zasilanie wewnętrzne modułu:
+        _radio.powerDown();        
+    } else {
+        Log.notice(F("FMRadio: Waking up from standby..." CR));
+        _radio.powerUp();          // Podaj zasilanie na układy radiowe
+        _radio.setMute(false);     // Wyłącz wyciszenie
+        _radio.setVolume(_volume); // Przywróć poprzednią głośność
+        setFrequency(_frequency);   // Ponownie ustaw stację
+    }
+}

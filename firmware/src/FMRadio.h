@@ -18,6 +18,7 @@ public:
 
     ScanState getScanState() const { return _scanState; }
 
+    void setStandby(bool on);git
     void     begin(uint16_t startFreq, uint8_t startVolume = 8);
     void     update();
     void     setFrequency(uint16_t freq);
