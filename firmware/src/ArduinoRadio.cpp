@@ -23,6 +23,10 @@ void ArduinoRadio::begin() {
     _knx.begin();
 
     enterState(State::IDLE);
+
+    // Seed KNX-change snapshots so the first update() call is a no-op
+    _lastKnxFreq = stationFreq(0);
+    _lastKnxVol  = _radio.getVolume();
 }
 
 void ArduinoRadio::update() {
@@ -39,6 +43,7 @@ void ArduinoRadio::update() {
     }
 
     _knx.update(&_radio);
+    checkKnxChanges();
 }
 
 // ---------------------------------------------------------------------------
@@ -536,4 +541,39 @@ void ArduinoRadio::buildNameFreqLine(uint8_t index, char* out) {
         out[8 + i] = (i < fLen) ? freqBuf[i] : ' ';
     }
     out[16] = '\0';
+}
+
+// ---------------------------------------------------------------------------
+// KNX-driven change detection
+// ---------------------------------------------------------------------------
+
+void ArduinoRadio::checkKnxChanges() {
+    uint16_t curFreq = _radio.getFrequency();
+    uint8_t  curVol  = _radio.getVolume();
+
+    bool freqChanged = (curFreq != _lastKnxFreq);
+    bool volChanged  = (curVol  != _lastKnxVol);
+
+    _lastKnxFreq = curFreq;
+    _lastKnxVol  = curVol;
+
+    if (!freqChanged && !volChanged) return;
+
+    if (freqChanged) {
+        // Try to find the new frequency in the known station list
+        // so the channel number on the display stays in sync.
+        uint8_t total = stationCount();
+        for (uint8_t i = 0; i < total; i++) {
+            if (stationFreq(i) == curFreq) {
+                _stationIndex = i;
+                break;
+            }
+        }
+        // Enter TUNING so line 0 shows freq + CH immediately.
+        // State auto-returns to IDLE after TUNING_TIMEOUT_MS.
+        enterState(State::TUNING);
+    } else {
+        // Volume-only change → show bar, auto-return to IDLE.
+        enterState(State::VOLUME);
+    }
 }

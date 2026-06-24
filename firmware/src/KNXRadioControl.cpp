@@ -39,6 +39,22 @@ void KNXRadioControl::update(FMRadio* radio) {
             _lastReconnectAttemptMs = now;
             Log.notice(F("KNXRadio: Retrying connection to BAOS832..." CR));
             _isConnected = baos_.begin();
+            if (_isConnected) {
+                // Reset all cached values so every datapoint is resent
+                // immediately on the next poll cycle.
+                _lastFreq             = 0;
+                _lastVol              = 255;
+                _lastRssi             = -127;
+                memset(_lastStation, '\0', sizeof(_lastStation));
+                _lastRdsChangeCounter = 255;
+                _lastHour             = 255;
+                _lastMinute           = 255;
+                _lastDay              = 0;
+                _lastMonth            = 0;
+                _lastYear             = 0;
+                _lastPollMs           = 0;   // trigger immediate poll
+                Log.notice(F("KNXRadio: Reconnected — full state resend queued." CR));
+            }
         }
         if (!_isConnected) return;
     }

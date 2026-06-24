@@ -83,4 +83,19 @@ private:
     const char* stationName(uint8_t index) const;
 
     static void formatFreq(uint16_t freq, char* buf, uint8_t bufSize);
+
+    // -----------------------------------------------------------------------
+    // KNX-driven change detection
+    //
+    // Snapshots of radio state taken after every _knx.update() call.
+    // If KNX changed frequency or volume (seek / setVolume commands),
+    // the display is updated to reflect the new state.
+    // -----------------------------------------------------------------------
+    uint16_t _lastKnxFreq = 0;
+    uint8_t  _lastKnxVol  = 255;
+
+    /// Compare current radio state against KNX snapshots.
+    /// When a KNX command changed freq or vol, enters the appropriate
+    /// display state (TUNING or VOLUME) so the LCD updates immediately.
+    void checkKnxChanges();
 };
